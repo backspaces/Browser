@@ -38,10 +38,13 @@ explains it.
 - [DOM](DOM/): the page as a tree of objects; building it with
   `createElement`, and why `textContent` is safe where `innerHTML` isn't.
   ([try it](https://backspaces.github.io/Browser/DOM/))
+- [CORS](CORS/): why a page can send to any site but only read replies from
+  sites that allow it; each `access-control-*` header and its common
+  values, with real requests that succeed and fail on purpose.
+  ([try it](https://backspaces.github.io/Browser/CORS/))
 
-Planned, roughly in order: events and forms, `fetch` and CORS (including
-a deliberately failing request), storage, modules, page lifecycle, CSS
-layout (flex, then grid), canvas.
+Planned, roughly in order: events and forms, `fetch`, storage, modules,
+page lifecycle, CSS layout (flex, then grid), canvas.
 
 ## Viewing the examples
 

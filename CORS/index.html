@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CORS</title>
+<style>
+  body { font: 15px system-ui, sans-serif; max-width: 56rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.4; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 .3rem; }
+  h3 { font-size: 1rem; margin: 0 0 .3rem; }
+  code, pre { font: 12.5px ui-monospace, monospace; }
+  pre { margin: .3rem 0; padding: .4rem .5rem; background: #f4f4f4; border: 1px solid #ddd; overflow-x: auto; white-space: pre-wrap; }
+  .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .5rem 0; }
+  .test { border: 1px solid #ccc; padding: .6rem .8rem; margin: .8rem 0; }
+  .test .result:empty, .test .why[hidden] { display: none; }
+  .verdict { border: 1px solid; padding: .5rem .8rem; }
+  .ok { background: #e6f4e6; border-color: #7a7; }
+  .bad { background: #fbe6e6; border-color: #c77; }
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 44rem) { .columns { grid-template-columns: 1fr; } }
+  fieldset { border: 1px solid #ccc; margin: 0; }
+  label.f { display: grid; grid-template-columns: 11rem 1fr; gap: .5rem; align-items: center; margin: .3rem 0; }
+  @media (max-width: 30rem) { label.f { grid-template-columns: 1fr; gap: .1rem; } }
+  label.f input[type=text], label.f select { font: 13px ui-monospace, monospace; padding: .2rem; min-width: 0; }
+  #trace ol { padding-left: 1.3rem; }
+  #trace li { margin: .6rem 0; }
+  .check { display: block; margin: .3rem 0; }
+  .pass { color: #262; }
+  .fail { color: #a22; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: .35rem .5rem; text-align: left; vertical-align: top; }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>CORS</h1>
+<p>By default a page may <em>send</em> requests to any site but may only
+<em>read</em> replies from its own <b>origin</b> (scheme + host + port).
+CORS (Cross-Origin Resource Sharing) is how a server tells the browser
+"pages from other origins may read this". It's all done with
+<code>access-control-*</code> headers, and the browser, not the server,
+enforces it. <a href="https://github.com/backspaces/Browser/blob/main/CORS/README.md">Notes</a>.</p>
+<p>This page's origin: <code id="origin"></code></p>
+
+<h2>1. Real requests</h2>
+<p>Each button runs the <code>fetch</code> shown, from this page, against
+<a href="https://backspaces-rooms.val.run/">Rooms</a> (a val.town server
+that sends the three headers below) or example.com (which sends none).
+Open DevTools' <b>Network</b> tab to watch the preflight
+<code>OPTIONS</code> requests, and the <b>Console</b> for the browser's
+explanation of each failure, which <code>fetch</code> itself never gets.</p>
+<pre>access-control-allow-origin: *
+access-control-allow-methods: GET, POST, OPTIONS
+access-control-allow-headers: content-type</pre>
+<div class="row"><button id="runAll">Run all</button></div>
+<div id="tests"></div>
+
+<h2>2. What if…</h2>
+<p>A model of the browser's checks. Describe a request and a server's
+headers, and it shows what the browser sends, what it checks, and whether
+the page gets to read the reply. Start from a preset, then change one thing
+at a time.</p>
+<div class="row">
+  Presets:
+  <button data-preset="rooms">Rooms</button>
+  <button data-preset="one">One origin</button>
+  <button data-preset="creds">Cookies</button>
+  <button data-preset="none">No CORS</button>
+  <button data-preset="list">Mistake: origin list</button>
+  <button data-preset="star">Mistake: * with cookies</button>
+</div>
+<div class="columns">
+  <fieldset>
+    <legend>The page's request</legend>
+    <label class="f">page origin <input type="text" id="sOrigin"></label>
+    <label class="f">method
+      <select id="sMethod"><option>GET</option><option>HEAD</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></label>
+    <label class="f">content-type
+      <select id="sType">
+        <option value="">(none)</option>
+        <option>text/plain</option>
+        <option>application/x-www-form-urlencoded</option>
+        <option>multipart/form-data</option>
+        <option>application/json</option>
+      </select></label>
+    <label class="f">extra header
+      <select id="sHeader"><option value="">(none)</option><option>authorization</option><option>x-api-key</option></select></label>
+    <label class="f">credentials
+      <select id="sCreds">
+        <option value="same-origin">same-origin (default)</option>
+        <option value="include">include (send cookies)</option>
+        <option value="omit">omit</option>
+      </select></label>
+  </fieldset>
+  <fieldset>
+    <legend>The server's CORS headers (blank = not sent)</legend>
+    <label class="check"><input type="checkbox" id="sOptions"> answers OPTIONS with a 2xx status</label>
+    <label class="f">allow-origin <input type="text" id="sAllowOrigin"></label>
+    <label class="f">allow-methods <input type="text" id="sAllowMethods"></label>
+    <label class="f">allow-headers <input type="text" id="sAllowHeaders"></label>
+    <label class="f">allow-credentials <input type="text" id="sAllowCreds" placeholder="true"></label>
+    <label class="f">expose-headers <input type="text" id="sExpose" placeholder="x-request-id"></label>
+    <label class="f">max-age <input type="text" id="sMaxAge" placeholder="seconds"></label>
+  </fieldset>
+</div>
+<div id="trace"></div>
+
+<h2>3. The headers</h2>
+<p>The browser adds the request headers itself; page code can't set or
+fake them. The server sends the response headers.</p>
+<div class="scroll">
+<table>
+  <tr><th>Header</th><th>Common values</th><th>What it does</th></tr>
+  <tr><th colspan="3">Sent by the browser</th></tr>
+  <tr><td><code>origin</code></td><td><code>https://backspaces.github.io</code>, <code>null</code></td>
+    <td>Who is asking: the page's origin. <code>null</code> for pages opened from a file, sandboxed frames and some redirects.</td></tr>
+  <tr><td><code>access-control-request-method</code></td><td><code>PUT</code></td>
+    <td>Preflight only: the method the real request will use.</td></tr>
+  <tr><td><code>access-control-request-headers</code></td><td><code>content-type,x-api-key</code></td>
+    <td>Preflight only: the non-simple headers the real request will carry, lowercase and sorted.</td></tr>
+  <tr><th colspan="3">Sent by the server</th></tr>
+  <tr><td><code>access-control-allow-origin</code></td><td><code>*</code>, or one exact origin</td>
+    <td>Which origin may read the reply. Exactly one value: <code>*</code> or a single origin. To allow a list, the server checks
+      <code>origin</code> against its list and echoes back the matching one. Required on every reply, preflight or not.</td></tr>
+  <tr><td><code>access-control-allow-methods</code></td><td><code>GET, POST, PUT, DELETE</code>, <code>*</code></td>
+    <td>Preflight only. Methods other than GET, HEAD and POST that are allowed. Those three always pass.</td></tr>
+  <tr><td><code>access-control-allow-headers</code></td><td><code>content-type, authorization</code>, <code>*</code></td>
+    <td>Preflight only. Non-simple request headers that are allowed. <code>*</code> doesn't cover <code>authorization</code>, which must be named.</td></tr>
+  <tr><td><code>access-control-allow-credentials</code></td><td><code>true</code> (or absent)</td>
+    <td>Allows a page that sent cookies (<code>credentials: "include"</code>) to read the reply. Then every <code>*</code> stops working as a wildcard.</td></tr>
+  <tr><td><code>access-control-expose-headers</code></td><td><code>x-request-id, etag</code>, <code>*</code></td>
+    <td>Response headers the page may read beyond the basic ones (<code>content-type</code>, <code>content-length</code>, <code>cache-control</code>, <code>content-language</code>, <code>expires</code>, <code>last-modified</code>, <code>pragma</code>).</td></tr>
+  <tr><td><code>access-control-max-age</code></td><td><code>600</code>, <code>7200</code>, <code>86400</code></td>
+    <td>Preflight only. Seconds the browser may reuse this preflight answer. Absent means 5 s. Chrome caps it at 2 hours, Firefox at 24.</td></tr>
+  <tr><td><code>vary</code></td><td><code>origin</code></td>
+    <td>Not a CORS header, but needed when <code>allow-origin</code> echoes the caller. It tells caches the reply differs per origin.</td></tr>
+</table>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const pageOrigin = location.origin; // "null" when opened from a file
+$("origin").textContent = pageOrigin;
+
+// Build an element with some text: el("pre", "hello").
+function el(tag, text, className) {
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  if (className) e.className = className;
+  return e;
+}
+
+// ---- 1. Real requests ----
+
+const rooms = "https://backspaces-rooms.val.run/room/cors-demo";
+
+const tests = [
+  {
+    title: "Simple GET: works",
+    code: `fetch(rooms + "?since=0")`,
+    run: () => fetch(rooms + "?since=0"),
+    why: `A GET with no extra headers is a "simple" request, so there's no preflight. The reply carries allow-origin: *, so the page may read it. The list of headers above is all the page can see: allow-origin itself and the rest are hidden, because Rooms sends no expose-headers.`,
+  },
+  {
+    title: "POST with JSON: preflight, then works",
+    code: `fetch(rooms, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ from: "cors-page", data: "hello" }),
+})`,
+    run: () =>
+      fetch(rooms, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ from: "cors-page", data: "hello" }),
+      }),
+    why: `application/json is not one of the three content types a simple request may use, so the browser first sends OPTIONS asking about POST and content-type (look for it in the Network tab). Rooms allows both, so the POST follows. This one really adds a message to the "cors-demo" room; Rooms deletes it after a day. Rooms sends no max-age, so the browser only remembers that answer for 5 seconds. Run it twice quickly and the second has no preflight; wait and it's back.`,
+  },
+  {
+    title: "PUT: blocked by allow-methods",
+    code: `fetch(rooms, { method: "PUT" })`,
+    run: () => fetch(rooms, { method: "PUT" }),
+    why: `PUT always needs a preflight. Rooms' answer lists GET, POST, OPTIONS, which doesn't include PUT, so the browser stops there. The PUT is never sent, and Rooms never sees it.`,
+  },
+  {
+    title: "A custom header: blocked by allow-headers",
+    code: `fetch(rooms + "?since=0", { headers: { "x-demo": "1" } })`,
+    run: () => fetch(rooms + "?since=0", { headers: { "x-demo": "1" } }),
+    why: `Any header outside a small safe list turns a GET into a preflighted request. The preflight asks about x-demo, but Rooms only allows content-type, so the real GET is never sent.`,
+  },
+  {
+    title: "With cookies: * is not enough",
+    code: `fetch(rooms + "?since=0", { credentials: "include" })`,
+    run: () => fetch(rooms + "?since=0", { credentials: "include" }),
+    why: `Still a simple GET, so there's no preflight and the request does reach Rooms. But when a page sends credentials, the reply must name the page's origin exactly and add allow-credentials: true. The wildcard * isn't accepted, so the browser hides the reply.`,
+  },
+  {
+    title: "No CORS headers at all: blocked",
+    code: `fetch("https://example.com/")`,
+    run: () => fetch("https://example.com/"),
+    why: `example.com answers normally (200, with a page), but its reply has no allow-origin header, so the browser won't let this page read it. The request was sent and answered. Note how little the error says: a bare TypeError. Only the Console explains, because telling the page more would leak information about the other site.`,
+  },
+  {
+    title: `mode: "no-cors": sent, but unreadable`,
+    code: `fetch("https://example.com/", { mode: "no-cors" })`,
+    run: () => fetch("https://example.com/", { mode: "no-cors" }),
+    why: `A common mistake is thinking this gets around CORS. It doesn't: it means "send it, and I promise not to look". The promise resolves, but with an "opaque" response: status 0, no headers, empty body. It's useful only for fire-and-forget pings.`,
+  },
+];
+
+// Describe a fetch result in a few lines.
+async function describe(res) {
+  const lines = [`status ${res.status}, type "${res.type}"`];
+  lines.push(`headers the page can see: ${[...res.headers.keys()].join(", ") || "(none)"}`);
+  const body = await res.text();
+  lines.push(`body: ${body.length > 160 ? body.slice(0, 160) + "…" : body || '""'}`);
+  return lines.join("\n");
+}
+
+for (const t of tests) {
+  const box = el("div", undefined, "test");
+  const button = el("button", "Run");
+  const result = el("pre", undefined, "result");
+  const why = el("p", t.why, "why");
+  why.hidden = true;
+  box.append(el("h3", t.title), el("pre", t.code), button, result, why);
+  $("tests").append(box);
+
+  t.go = async () => {
+    result.textContent = "…";
+    result.className = "result";
+    try {
+      const res = await t.run();
+      result.textContent = "resolved\n" + (await describe(res));
+      result.className = "result ok";
+    } catch (e) {
+      result.textContent = `rejected: ${e.name}: ${e.message}`;
+      result.className = "result bad";
+    }
+    why.hidden = false;
+  };
+  button.onclick = t.go;
+}
+
+$("runAll").onclick = async () => {
+  for (const t of tests) await t.go();
+};
+
+// ---- 2. What if… ----
+
+const presets = {
+  rooms: { options: true, allowOrigin: "*", allowMethods: "GET, POST, OPTIONS", allowHeaders: "content-type", allowCreds: "", expose: "", maxAge: "",
+           method: "POST", type: "application/json", header: "", creds: "same-origin" },
+  one:   { options: true, allowOrigin: "https://backspaces.github.io", allowMethods: "GET, POST, PUT, DELETE", allowHeaders: "content-type, x-api-key", allowCreds: "", expose: "x-request-id", maxAge: "600",
+           method: "PUT", type: "application/json", header: "x-api-key", creds: "same-origin" },
+  creds: { options: true, allowOrigin: "https://backspaces.github.io", allowMethods: "GET, POST, DELETE", allowHeaders: "content-type", allowCreds: "true", expose: "", maxAge: "600",
+           method: "DELETE", type: "", header: "", creds: "include" },
+  none:  { options: false, allowOrigin: "", allowMethods: "", allowHeaders: "", allowCreds: "", expose: "", maxAge: "",
+           method: "GET", type: "", header: "", creds: "same-origin" },
+  list:  { options: true, allowOrigin: "https://backspaces.github.io, https://example.org", allowMethods: "", allowHeaders: "", allowCreds: "", expose: "", maxAge: "",
+           method: "GET", type: "", header: "", creds: "same-origin" },
+  star:  { options: true, allowOrigin: "*", allowMethods: "*", allowHeaders: "*", allowCreds: "true", expose: "", maxAge: "",
+           method: "DELETE", type: "", header: "", creds: "include" },
+};
+
+const fields = {
+  options: "sOptions", allowOrigin: "sAllowOrigin", allowMethods: "sAllowMethods", allowHeaders: "sAllowHeaders",
+  allowCreds: "sAllowCreds", expose: "sExpose", maxAge: "sMaxAge",
+  method: "sMethod", type: "sType", header: "sHeader", creds: "sCreds",
+};
+
+function applyPreset(name) {
+  const p = presets[name];
+  for (const [key, id] of Object.entries(fields)) {
+    if (key === "options") $(id).checked = p.options;
+    else $(id).value = p[key];
+  }
+  $("sOrigin").value = "https://backspaces.github.io";
+  simulate();
+}
+
+for (const b of document.querySelectorAll("[data-preset]")) {
+  b.onclick = () => applyPreset(b.dataset.preset);
+}
+for (const id of [...Object.values(fields), "sOrigin"]) {
+  $(id).oninput = simulate;
+}
+
+const simpleMethods = ["GET", "HEAD", "POST"];
+const simpleTypes = ["text/plain", "application/x-www-form-urlencoded", "multipart/form-data"];
+const simpleResponseHeaders = ["cache-control", "content-language", "content-length", "content-type", "expires", "last-modified", "pragma"];
+
+// "a, B ,c" -> ["a", "b", "c"]
+const list = (s) => s.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+
+// The server's CORS headers, as it would send them, skipping blank ones.
+function serverHeaders(s, preflight) {
+  const h = [];
+  if (s.allowOrigin) h.push(["access-control-allow-origin", s.allowOrigin]);
+  if (s.allowCreds) h.push(["access-control-allow-credentials", s.allowCreds]);
+  if (preflight) {
+    if (s.allowMethods) h.push(["access-control-allow-methods", s.allowMethods]);
+    if (s.allowHeaders) h.push(["access-control-allow-headers", s.allowHeaders]);
+    if (s.maxAge) h.push(["access-control-max-age", s.maxAge]);
+  } else if (s.expose) {
+    h.push(["access-control-expose-headers", s.expose]);
+  }
+  return h;
+}
+
+// The origin + credentials check the browser runs on every reply.
+function originCheck(s, checks) {
+  const creds = s.creds === "include";
+  if (!s.allowOrigin) return checks.push([false, "no access-control-allow-origin header"]);
+  if (s.allowOrigin.includes(",")) {
+    return checks.push([false, "allow-origin holds a list; only one origin (or *) is allowed. Echo the matching origin instead."]);
+  }
+  if (s.allowOrigin === "*") {
+    if (creds) return checks.push([false, `allow-origin is *, which isn't accepted when the request carries cookies`]);
+    checks.push([true, "allow-origin is *: any origin may read"]);
+  } else if (s.allowOrigin === s.origin) {
+    checks.push([true, `allow-origin names ${s.origin} exactly`]);
+  } else {
+    return checks.push([false, `allow-origin is ${s.allowOrigin}, not this page's ${s.origin}`]);
+  }
+  if (creds) {
+    if (s.allowCreds !== "true") return checks.push([false, "cookies were sent but allow-credentials isn't true"]);
+    checks.push([true, "allow-credentials: true, so a reply to a request with cookies may be read"]);
+  }
+  return true;
+}
+
+function simulate() {
+  const s = {};
+  for (const [key, id] of Object.entries(fields)) {
+    s[key] = key === "options" ? $(id).checked : $(id).value.trim();
+  }
+  s.origin = $("sOrigin").value.trim() || "null";
+  const creds = s.creds === "include";
+
+  // Which request headers are outside the safe list?
+  const unsafe = [];
+  if (s.type && !simpleTypes.includes(s.type)) unsafe.push("content-type");
+  if (s.header) unsafe.push(s.header);
+  unsafe.sort();
+
+  const reasons = [];
+  if (!simpleMethods.includes(s.method)) reasons.push(`${s.method} isn't GET, HEAD or POST`);
+  if (unsafe.includes("content-type")) reasons.push(`content-type ${s.type} isn't one of the three form types`);
+  if (s.header) reasons.push(`${s.header} isn't on the safe header list`);
+  const preflight = reasons.length > 0;
+
+  const steps = [];
+  const step = (title, ...parts) => steps.push([title, parts]);
+
+  step(preflight ? "Preflight needed" : "Simple request: no preflight",
+    preflight ? "Because " + reasons.join("; ") + "."
+              : "GET/HEAD/POST with only safe headers. The browser sends it straight away and checks the reply afterwards.");
+
+  let blocked = false; // stopped at the preflight
+  let readable = false; // the page gets the reply
+
+  if (preflight) {
+    const req = [`OPTIONS /api`, `origin: ${s.origin}`, `access-control-request-method: ${s.method}`];
+    if (unsafe.length) req.push(`access-control-request-headers: ${unsafe.join(",")}`);
+    const checks = [];
+    let ok = true;
+    if (!s.options) {
+      checks.push([false, "the server doesn't answer OPTIONS with a 2xx status (many answer 404 or 405)"]);
+      ok = false;
+    } else {
+      ok = originCheck(s, checks) === true;
+      if (ok) {
+        const methods = list(s.allowMethods).map((m) => m.toUpperCase());
+        const star = methods.includes("*") && !creds;
+        if (simpleMethods.includes(s.method)) checks.push([true, `${s.method} is always allowed; allow-methods doesn't matter for it`]);
+        else if (methods.includes(s.method)) checks.push([true, `${s.method} is in allow-methods`]);
+        else if (star) checks.push([true, `allow-methods is *, which covers ${s.method} (no cookies)`]);
+        else {
+          checks.push([false, `${s.method} isn't in allow-methods${methods.includes("*") ? " (* is only a wildcard without cookies)" : ""}`]);
+          ok = false;
+        }
+      }
+      if (ok) {
+        const allowed = list(s.allowHeaders);
+        for (const name of unsafe) {
+          const star = allowed.includes("*") && !creds && name !== "authorization";
+          if (allowed.includes(name)) checks.push([true, `${name} is in allow-headers`]);
+          else if (star) checks.push([true, `allow-headers is *, which covers ${name}`]);
+          else {
+            const note = name === "authorization" && allowed.includes("*") ? " (* never covers authorization; it has to be named)"
+                       : allowed.includes("*") ? " (* is only a wildcard without cookies)" : "";
+            checks.push([false, `${name} isn't in allow-headers${note}`]);
+            ok = false;
+          }
+        }
+      }
+    }
+    const res = [s.options ? "HTTP 204" : "HTTP 405",
+      ...(s.options ? serverHeaders(s, true).map(([k, v]) => `${k}: ${v}`) : [])];
+    let after = "";
+    if (ok) {
+      const age = Number(s.maxAge);
+      after = !s.maxAge ? "No max-age, so the browser reuses this answer for only 5 seconds."
+            : `max-age ${s.maxAge}: the browser may reuse this answer for ${Math.min(age, 7200)} s in Chrome (capped at 2 h), ${Math.min(age, 86400)} s in Firefox.`;
+    } else {
+      after = "The browser stops here. The real request is never sent, and fetch() rejects with TypeError: Failed to fetch.";
+      blocked = true;
+    }
+    step("Browser → server: the preflight", { pre: req.join("\n") });
+    step("Server → browser", { pre: res.join("\n") }, checks, after);
+  }
+
+  if (!blocked) {
+    const req = [`${s.method} /api`, `origin: ${s.origin}`];
+    if (s.type) req.push(`content-type: ${s.type}`);
+    if (s.header) req.push(`${s.header}: …`);
+    if (creds) req.push("cookie: (this site's cookies)");
+    step(preflight ? "Browser → server: the real request" : "Browser → server", { pre: req.join("\n") },
+      creds ? "" : s.creds === "omit" ? "credentials: omit, so no cookies." : "No cookies: the default (same-origin) only sends them to this page's own origin.");
+
+    const sent = ["content-type", "content-length", "date", "x-request-id"];
+    const res = ["HTTP 200", ...serverHeaders(s, false).map(([k, v]) => `${k}: ${v}`),
+      "content-type: application/json", "content-length: 42", "date: …", "x-request-id: 7f3a"];
+    const checks = [];
+    const ok = originCheck(s, checks) === true;
+    readable = ok;
+    let after;
+    if (ok) {
+      const exposed = list(s.expose);
+      const all = exposed.includes("*") && !creds;
+      const visible = sent.filter((h) => simpleResponseHeaders.includes(h) || exposed.includes(h) || all);
+      const hidden = sent.filter((h) => !visible.includes(h));
+      after = `The page can read the status, the body, and these headers: ${visible.join(", ")}.` +
+        (hidden.length ? ` Hidden: ${hidden.join(", ")}${s.expose ? "" : " (add them to expose-headers)"}.` : "");
+    } else {
+      after = "The server received and handled the request (any side effects happened), but the browser hides the reply. fetch() rejects with TypeError: Failed to fetch.";
+    }
+    step("Server → browser", { pre: res.join("\n") }, checks, after);
+  }
+
+  // Draw the steps.
+  const ol = el("ol");
+  for (const [title, parts] of steps) {
+    const li = el("li");
+    li.append(el("b", title));
+    for (const part of parts) {
+      if (!part) continue;
+      if (Array.isArray(part)) {
+        for (const [pass, text] of part) li.append(el("div", (pass ? "✓ " : "✗ ") + text, pass ? "check pass" : "check fail"));
+      } else if (part.pre) {
+        li.append(el("pre", part.pre));
+      } else {
+        li.append(el("div", part));
+      }
+    }
+    ol.append(li);
+  }
+  const verdict = readable
+    ? el("p", "✓ The page can read the reply.", "verdict ok")
+    : el("p", "✗ The page can't read the reply.", "verdict bad");
+  $("trace").replaceChildren(ol, verdict);
+}
+
+applyPreset("rooms");
+</script>
+</body>
+</html>
