@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DOM</title>
+<style>
+  body { font: 15px system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.4; }
+  .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .5rem 0; }
+  #text { flex: 1; min-width: 16rem; font: 13px ui-monospace, monospace; padding: .3rem; }
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 40rem) { .columns { grid-template-columns: 1fr; } }
+  h2 { font-size: 1rem; margin: 1rem 0 .3rem; }
+  #list, #tree { border: 1px solid #ccc; min-height: 10rem; margin: 0; }
+  #list { padding: .5rem 1.5rem; }
+  #tree { font: 12px ui-monospace, monospace; padding: .5rem; overflow-x: auto; }
+  #ran { background: #fdd; border: 1px solid #c33; padding: .5rem; }
+</style>
+</head>
+<body>
+<h1>The DOM</h1>
+<p>The browser reads HTML text once, turns it into a tree of objects (the
+Document Object Model), and draws the page from that tree. From then on,
+JavaScript changes the page by changing the tree. Add some items and watch
+both sides. <a href="https://github.com/backspaces/Browser/blob/main/DOM/README.md">Notes</a>.</p>
+
+<div class="row">
+  <input id="text" value="<b>bold</b> text" aria-label="Item text">
+</div>
+<div class="row">
+  <button id="safe">Add with textContent</button>
+  <button id="unsafe">Add with innerHTML</button>
+  <button id="sneaky">Load a sneaky one</button>
+  <button id="clear">Clear</button>
+  <label><input type="checkbox" id="spaces"> show whitespace text nodes</label>
+</div>
+<p id="ran" hidden>⚠ Code hidden in that text just ran. <code>innerHTML</code>
+let it in; <code>textContent</code> would have shown it as plain text.</p>
+
+<div class="columns">
+  <div>
+    <h2>The page</h2>
+    <ul id="list">
+      <li>first item</li>
+    </ul>
+  </div>
+  <div>
+    <h2>The tree behind it</h2>
+    <pre id="tree"></pre>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const list = $("list");
+
+// Build a new <li>, fill it one of two ways, and attach it to the list.
+function addItem(how) {
+  const li = document.createElement("li");
+  if (how === "text") li.textContent = $("text").value;
+  else li.innerHTML = $("text").value;
+  list.append(li);
+  drawTree();
+}
+
+$("safe").onclick = () => addItem("text");
+$("unsafe").onclick = () => addItem("html");
+$("sneaky").onclick = () => {
+  $("text").value =
+    `<img src="nope" onerror="document.getElementById('ran').hidden = false">`;
+};
+$("clear").onclick = () => {
+  list.replaceChildren();
+  $("ran").hidden = true;
+  drawTree();
+};
+$("spaces").onchange = () => drawTree();
+
+// One line per node, indented by depth: elements as <tag>, text nodes
+// as the exact string they hold.
+function lines(node, depth) {
+  const pad = "  ".repeat(depth);
+  if (node.nodeType === Node.TEXT_NODE) {
+    const blank = node.textContent.trim() === "";
+    if (blank && !$("spaces").checked) return [];
+    return [pad + "text " + JSON.stringify(node.textContent)];
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return [pad + node.nodeName];
+  const attrs = [...node.attributes]
+    .map((a) => ` ${a.name}="${a.value}"`)
+    .join("");
+  const children = [...node.childNodes].flatMap((child) => lines(child, depth + 1));
+  return [pad + "<" + node.localName + attrs + ">", ...children];
+}
+
+function drawTree() {
+  $("tree").textContent = lines(list, 0).join("\n");
+}
+
+drawTree();
+</script>
+</body>
+</html>
