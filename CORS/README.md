@@ -13,6 +13,9 @@ parts:
    request and the server's headers.
 3. **The headers:** a reference table.
 
+This builds on [HTTP](../HTTP/) (requests, methods, headers, status
+codes) and [fetch](../fetch/) (making requests from JavaScript).
+
 ## Origins
 
 An **origin** is scheme + host + port. Two URLs have the same origin only

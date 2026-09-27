@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fetch</title>
+<style>
+  body { font: 15px system-ui, sans-serif; max-width: 56rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.4; }
+  h2 { font-size: 1.05rem; margin: 1.2rem 0 .3rem; }
+  code, pre, input, select, textarea { font: 12.5px ui-monospace, monospace; }
+  pre { margin: .3rem 0; padding: .4rem .5rem; background: #f4f4f4; border: 1px solid #ddd; overflow-x: auto; white-space: pre-wrap; }
+  .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .5rem 0; }
+  fieldset { border: 1px solid #ccc; margin: 0; }
+  label.f { display: grid; grid-template-columns: 7.5rem 1fr; gap: .5rem; align-items: center; margin: .3rem 0; }
+  @media (max-width: 30rem) { label.f { grid-template-columns: 1fr; gap: .1rem; } }
+  label.f input, label.f select, label.f textarea { padding: .2rem; min-width: 0; }
+  textarea { resize: vertical; }
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 44rem) { .columns { grid-template-columns: 1fr; } }
+  .note { border: 1px solid; padding: .5rem .8rem; margin: .5rem 0; }
+  .ok { background: #e6f4e6; border-color: #7a7; }
+  .warn { background: #fdf3dc; border-color: #c9a33a; }
+  .bad { background: #fbe6e6; border-color: #c77; }
+  .hint { color: #555; font-size: 13.5px; margin: .2rem 0 .5rem; }
+</style>
+</head>
+<body>
+<h1>fetch</h1>
+<p>A page talks to a server with <a href="../HTTP/">HTTP</a>: it sends a <b>request</b> (a method,
+a URL, some headers, maybe a body) and gets back a <b>response</b> (a
+status, headers, a body). <code>fetch()</code> is how JavaScript does that.
+Build a request to <a href="https://backspaces-rooms.val.run/">Rooms</a>
+below, send it, and see the code, the request object, and the reply.
+<a href="https://github.com/backspaces/Browser/blob/main/fetch/README.md">Notes</a>.</p>
+
+<div class="row">
+  Try:
+  <button data-preset="read">Read messages</button>
+  <button data-preset="post">Post a message</button>
+  <button data-preset="head">HEAD</button>
+  <button data-preset="badName">Bad room name</button>
+  <button data-preset="notJson">Not JSON</button>
+  <button data-preset="missing">Missing field</button>
+  <button data-preset="delete">DELETE</button>
+  <button data-preset="getBody">GET with a body</button>
+</div>
+<p class="hint" id="presetHint"></p>
+
+<div class="columns">
+  <fieldset>
+    <legend>The request</legend>
+    <label class="f">method
+      <select id="method"><option>GET</option><option>HEAD</option><option>POST</option><option>PUT</option><option>DELETE</option></select></label>
+    <label class="f">path <input id="path"></label>
+    <label class="f">?since= <input id="since" placeholder="(leave out)"></label>
+    <label class="f">&amp;me= <input id="me" placeholder="(leave out)"></label>
+    <label class="f">content-type
+      <select id="type"><option value="">(not set)</option><option>application/json</option><option>text/plain</option></select></label>
+    <label class="f">body <textarea id="body" rows="4" placeholder="(no body)"></textarea></label>
+    <div class="row"><button id="send">Send</button></div>
+  </fieldset>
+  <div>
+    <h2>The code</h2>
+    <pre id="code"></pre>
+  </div>
+</div>
+
+<div class="columns">
+  <div>
+    <h2>The Request object</h2>
+    <pre id="request"></pre>
+  </div>
+  <div>
+    <h2>The Response</h2>
+    <pre id="response">(press Send)</pre>
+  </div>
+</div>
+<div id="verdict"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const server = "https://backspaces-rooms.val.run";
+
+const presets = {
+  read: { method: "GET", path: "/room/demo", since: "0", me: "", type: "", body: "",
+    hint: "Read a room's messages. since=0 means from the start; try the last id from a reply to get only newer ones." },
+  post: { method: "POST", path: "/room/demo", since: "", me: "", type: "application/json",
+    body: '{"from": "fetch-page", "data": "hello"}',
+    hint: "Add a message. Then Read messages to see it. (Rooms deletes messages after a day.)" },
+  head: { method: "HEAD", path: "/room/demo", since: "0", me: "", type: "", body: "",
+    hint: "HEAD asks for just the status and headers of what GET would return. Rooms' code only handles GET and POST, so it answers 405. Frameworks often answer HEAD for you; plain handlers have to do it themselves." },
+  badName: { method: "GET", path: "/room/bad name", since: "", me: "", type: "", body: "",
+    hint: "A space isn't allowed in a room name. Note how the URL encodes it as %20." },
+  notJson: { method: "POST", path: "/room/demo", since: "", me: "", type: "", body: "hello",
+    hint: "A body that isn't JSON. With no content-type set, the browser adds text/plain itself." },
+  missing: { method: "POST", path: "/room/demo", since: "", me: "", type: "application/json", body: '{"from": "fetch-page"}',
+    hint: "Valid JSON, but Rooms needs both from and data." },
+  delete: { method: "DELETE", path: "/room/demo", since: "", me: "", type: "", body: "",
+    hint: "Rooms would answer 405, but the browser never sends it: DELETE needs CORS permission Rooms doesn't give." },
+  getBody: { method: "GET", path: "/room/demo", since: "", me: "", type: "text/plain", body: "hello",
+    hint: "GET and HEAD can't have a body. This fails before anything is sent." },
+};
+
+const inputs = ["method", "path", "since", "me", "type", "body"];
+
+function applyPreset(name) {
+  const p = presets[name];
+  for (const id of inputs) $(id).value = p[id];
+  $("presetHint").textContent = p.hint;
+  $("response").textContent = "(press Send)";
+  $("verdict").replaceChildren();
+  update();
+}
+
+for (const b of document.querySelectorAll("[data-preset]")) {
+  b.onclick = () => applyPreset(b.dataset.preset);
+}
+for (const id of inputs) {
+  $(id).oninput = () => { $("presetHint").textContent = ""; update(); };
+}
+
+// Read the form into the pieces fetch needs.
+function readForm() {
+  const url = new URL($("path").value, server);
+  for (const name of ["since", "me"]) {
+    if ($(name).value !== "") url.searchParams.set(name, $(name).value);
+  }
+  const init = { method: $("method").value };
+  if ($("type").value) init.headers = { "content-type": $("type").value };
+  if ($("body").value !== "") init.body = $("body").value;
+  return { url, init };
+}
+
+// A string as JavaScript source: a template literal if it holds double
+// quotes (like JSON), so it reads without backslashes.
+const quote = (str) =>
+  str.includes('"') ? "`" + str.replace(/[`\\$]/g, "\\$&") + "`" : JSON.stringify(str);
+
+// The fetch call the form describes, as source code.
+function codeFor(url, init) {
+  const lines = [`const url = new URL(${JSON.stringify($("path").value)}, ${JSON.stringify(server)});`];
+  for (const [k, v] of url.searchParams) lines.push(`url.searchParams.set(${JSON.stringify(k)}, ${JSON.stringify(v)});`);
+  const opts = [];
+  if (init.method !== "GET") opts.push(`  method: ${JSON.stringify(init.method)},`);
+  if (init.headers) opts.push(`  headers: { "content-type": ${JSON.stringify(init.headers["content-type"])} },`);
+  if (init.body !== undefined) opts.push(`  body: ${quote(init.body)},`);
+  lines.push(opts.length ? `const res = await fetch(url, {\n${opts.join("\n")}\n});` : `const res = await fetch(url);`);
+  lines.push(`console.log(res.status, res.ok);`);
+  if (init.method !== "HEAD") lines.push(`const data = await res.json(); // or res.text()`);
+  return lines.join("\n");
+}
+
+// Show the code and the Request object the form describes. Returns the
+// Request, or undefined if the browser refuses to build one.
+function update() {
+  const { url, init } = readForm();
+  $("code").textContent = codeFor(url, init);
+  try {
+    const req = new Request(url, init);
+    const lines = [
+      `req.method  ${req.method}`,
+      `req.url     ${req.url}`,
+      `req.headers ${[...req.headers].map(([k, v]) => `${k}: ${v}`).join("\n            ") || "(none set by the page)"}`,
+      `body        ${init.body === undefined ? "(none)" : init.body}`,
+      "",
+      "The browser adds more when it sends it:",
+      `origin: ${location.origin}, host, user-agent, accept, …`,
+    ];
+    $("request").textContent = lines.join("\n");
+    return req;
+  } catch (e) {
+    $("request").textContent = `new Request() threw\n${e.name}: ${e.message}`;
+  }
+}
+
+$("send").onclick = async () => {
+  const req = update();
+  $("response").textContent = "…";
+  $("verdict").replaceChildren();
+  if (!req) {
+    $("response").textContent = "(nothing sent)";
+    return verdict("bad", "Nothing was sent. The browser refused to build this request, so fetch() would reject straight away with the same TypeError.");
+  }
+  const start = performance.now();
+  let res;
+  try {
+    res = await fetch(req);
+  } catch (e) {
+    $("response").textContent = `(no response)\n${e.name}: ${e.message}`;
+    return verdict("bad", "fetch() rejected: there's no Response at all. That only happens when no reply could be used: the network failed, or CORS blocked it (as here for DELETE; the Console says which). See the CORS topic.");
+  }
+  const ms = Math.round(performance.now() - start);
+  const text = await res.text();
+  let body = text;
+  try { body = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+  $("response").textContent = [
+    `res.status  ${res.status}`,
+    `res.ok      ${res.ok}`,
+    `res.headers ${[...res.headers].map(([k, v]) => `${k}: ${v}`).join("\n            ")}`,
+    `time        ${ms} ms`,
+    "",
+    body === "" ? "(empty body)" : body,
+  ].join("\n");
+  if (res.ok) verdict("ok", `fetch() resolved and res.ok is true: status ${res.status} is in the 200s.`);
+  else verdict("warn", `fetch() still resolved, even though this is an error: the server did answer, with ${res.status}. fetch() doesn't reject on HTTP errors, so code has to check res.ok (or res.status) itself.`);
+};
+
+function verdict(kind, text) {
+  const p = document.createElement("p");
+  p.className = "note " + kind;
+  p.textContent = text;
+  $("verdict").replaceChildren(p);
+}
+
+applyPreset("read");
+</script>
+</body>
+</html>

@@ -28,7 +28,9 @@ it helps to know which one you're looking at:
    and the same-origin rule that CORS relaxes.
 
 This repo is mostly layer 3, plus HTML and CSS, with layer 2 where it
-matters. Each topic's README says which layer it's about.
+matters. Each topic's README says which layer it's about. Underneath
+all three is HTTP, the protocol pages and servers use to talk. It isn't
+JavaScript, but it gets its own topic because so much depends on it.
 
 ## Topics
 
@@ -38,12 +40,19 @@ explains it.
 - [DOM](DOM/): the page as a tree of objects; building it with
   `createElement`, and why `textContent` is safe where `innerHTML` isn't.
   ([try it](https://backspaces.github.io/Browser/DOM/))
+- [HTTP](HTTP/): the protocol under it all. Requests and responses,
+  methods, status codes, headers and caching, and how HTTP/1.1's text
+  became HTTP/2 and 3's binary frames.
+  ([try it](https://backspaces.github.io/Browser/HTTP/))
+- [fetch](fetch/): speaking HTTP from JavaScript. `fetch()`, `URL`,
+  `Headers`, `Request` and `Response`, and why a 404 doesn't make `fetch`
+  fail. ([try it](https://backspaces.github.io/Browser/fetch/))
 - [CORS](CORS/): why a page can send to any site but only read replies from
   sites that allow it; each `access-control-*` header and its common
   values, with real requests that succeed and fail on purpose.
   ([try it](https://backspaces.github.io/Browser/CORS/))
 
-Planned, roughly in order: events and forms, `fetch`, storage, modules,
+Planned, roughly in order: events and forms, storage, modules,
 page lifecycle, CSS layout (flex, then grid), canvas.
 
 ## Viewing the examples

@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTTP</title>
+<style>
+  body { font: 15px system-ui, sans-serif; max-width: 56rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.4; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 .3rem; }
+  code, pre { font: 12.5px ui-monospace, monospace; }
+  pre { margin: .3rem 0; padding: .4rem .5rem; background: #f4f4f4; border: 1px solid #ddd; overflow-x: auto; }
+  .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .5rem 0; }
+  button[aria-pressed=true] { font-weight: bold; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { border: 1px solid #ccc; padding: .3rem .45rem; text-align: left; vertical-align: top; }
+  td.mono { font: 12px ui-monospace, monospace; white-space: nowrap; }
+  td.long { white-space: normal; word-break: break-all; }
+  .bar { display: flex; height: .8rem; min-width: 1px; margin-top: .2rem; }
+  .bar span { display: block; height: 100%; }
+  .dns { background: #9bc; } .connect { background: #e9a23b; } .tls { background: #b87fd0; }
+  .wait { background: #7a7; } .download { background: #4a7fd0; }
+  .key span { display: inline-block; width: .8rem; height: .8rem; vertical-align: middle; margin: 0 .2rem 0 .6rem; }
+  .hint { color: #555; font-size: 13.5px; }
+</style>
+</head>
+<body>
+<h1>HTTP</h1>
+<p>HTTP is the protocol under every page, image, script and
+<code>fetch</code>: the browser sends a <b>request</b> (method, URL,
+headers, maybe a body) and the server sends back a <b>response</b>
+(status, headers, maybe a body). That meaning hasn't changed since the
+1990s. How it's carried has: first as lines of text, now as binary
+frames. <a href="https://github.com/backspaces/Browser/blob/main/HTTP/README.md">Notes</a>.</p>
+
+<h2>1. One request, three versions</h2>
+<p>The same request, reading a <a href="https://backspaces-rooms.val.run/">Rooms</a>
+room, and its reply, as each version of HTTP carries them.</p>
+<div class="row" id="versionButtons">
+  <button data-version="h1">HTTP/1.1</button>
+  <button data-version="h2">HTTP/2</button>
+  <button data-version="h3">HTTP/3</button>
+</div>
+<pre id="versionWire"></pre>
+<ul id="versionNotes"></ul>
+
+<h2>2. This page's requests</h2>
+<p>A page can't see HTTP's bytes, but the browser keeps a record of every
+request it made: which protocol, how the time was spent, how many bytes
+came over the network. Each button makes one request and adds a row.</p>
+<div class="row">
+  <button id="plain">fetch(file)</button>
+  <button id="noCache">fetch(file, { cache: "no-cache" })</button>
+  <button id="reload">fetch(file, { cache: "reload" })</button>
+  <button id="cross">fetch(Rooms)</button>
+</div>
+<p class="hint" id="requestHint">The file is this repo's <code>README.md</code>,
+from the same server as this page.</p>
+<div class="scroll"><table id="requests"></table></div>
+<p class="hint key">Time:
+  <span class="dns"></span>DNS <span class="connect"></span>connect
+  <span class="tls"></span>TLS <span class="wait"></span>waiting for the server
+  <span class="download"></span>download</p>
+
+<h2>3. This page's response headers</h2>
+<p>The headers the server sent with this page, read with a
+<code>HEAD</code> request to the page's own URL. Same-origin, so the page
+may read them all.</p>
+<div class="scroll"><table id="headers"></table></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function el(tag, text, className) {
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  if (className) e.className = className;
+  return e;
+}
+
+// ---- 1. One request, three versions ----
+
+const versions = {
+  h1: {
+    wire: `GET /room/demo?since=0 HTTP/1.1
+Host: backspaces-rooms.val.run
+Accept: */*
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: 37
+
+{"messages":[],"last":0,"more":false}`,
+    notes: [
+      "Plain text, one line per header, a blank line before the body. You could type it by hand, and early web developers did.",
+      "The first line holds the method, path and version; the reply's first line holds the version, status code and a phrase (\"OK\").",
+      "One request at a time per connection: the next waits for this reply to finish. Browsers open up to six connections per server to get around that.",
+      "Still used, mostly between servers and for local development. This notation is also how specs, curl -v and most documentation write HTTP, whatever version is really in use.",
+    ],
+  },
+  h2: {
+    wire: `HEADERS frame, stream 5
+  :method     GET
+  :scheme     https
+  :authority  backspaces-rooms.val.run
+  :path       /room/demo?since=0
+  accept      */*
+      (sent compressed: :method GET is the single byte 82)
+
+HEADERS frame, stream 5
+  :status        200
+  content-type   application/json
+  content-length 37
+
+DATA frame, stream 5, end of stream
+  {"messages":[],"last":0,"more":false}`,
+    notes: [
+      "Binary frames instead of text. The first line becomes \"pseudo-headers\" starting with a colon: :method, :path, :status. DevTools shows them in a request's Headers panel.",
+      "Header names must be lowercase, which is why lowercase has become the common style everywhere.",
+      "Headers are compressed (HPACK) against a shared table. Common ones like :method GET are one byte, and a header repeated on the next request costs a byte or two.",
+      "No \"OK\": only the number. That's why res.statusText is usually empty.",
+      "Many requests share one connection, as numbered streams whose frames interleave. No more six-connection limit. Rooms and GitHub Pages both speak it.",
+    ],
+  },
+  h3: {
+    wire: `QUIC stream 0 (over UDP)
+  HEADERS frame
+    :method     GET
+    :scheme     https
+    :authority  backspaces-rooms.val.run
+    :path       /room/demo?since=0
+    accept      */*
+
+QUIC stream 0
+  HEADERS frame
+    :status        200
+    content-type   application/json
+  DATA frame
+    {"messages":[],"last":0,"more":false}`,
+    notes: [
+      "The same frames and pseudo-headers as HTTP/2 (compressed with QPACK, a close relative of HPACK), carried on QUIC instead of TCP.",
+      "QUIC runs over UDP and builds in the encryption, so connecting takes fewer round trips.",
+      "Each stream is independent: a lost packet only stalls its own request, not every request on the connection as it can with HTTP/2 over TCP.",
+      "A browser learns a server can do it from an alt-svc header on an earlier reply. Rooms sends alt-svc: h3=\":443\", so your browser may already use HTTP/3 for it.",
+    ],
+  },
+};
+
+function showVersion(name) {
+  $("versionWire").textContent = versions[name].wire;
+  $("versionNotes").replaceChildren(...versions[name].notes.map((n) => el("li", n)));
+  for (const b of $("versionButtons").children) {
+    b.setAttribute("aria-pressed", b.dataset.version === name);
+  }
+}
+
+for (const b of $("versionButtons").children) b.onclick = () => showVersion(b.dataset.version);
+showVersion("h2");
+
+// ---- 2. This page's requests ----
+
+const file = new URL("../README.md", location.href).href;
+const rooms = "https://backspaces-rooms.val.run/room/demo?since=0";
+
+const buttons = {
+  plain: { run: () => fetch(file),
+    hint: "The default: use a cached copy if the server's cache-control says it's still fresh, otherwise ask. Press it twice: the second usually says \"from cache\", with nothing sent." },
+  noCache: { run: () => fetch(file, { cache: "no-cache" }),
+    hint: "Ask the server whether the cached copy is still good, sending its etag in if-none-match. If so, the reply is a bodyless 304 Not Modified and the body comes from the cache: few bytes transferred." },
+  reload: { run: () => fetch(file, { cache: "reload" }),
+    hint: "Ignore the cache and download it all again." },
+  cross: { run: () => fetch(rooms),
+    hint: "Another origin. Its protocol, timings and sizes are hidden (blank or 0) unless the server sends a Timing-Allow-Origin header, which Rooms doesn't. DevTools' Network tab still shows them to you." },
+};
+
+for (const [id, b] of Object.entries(buttons)) {
+  $(id).onclick = async () => {
+    $("requestHint").textContent = b.hint;
+    try {
+      await (await b.run()).text(); // read the body so the timing entry is complete
+    } catch (e) {
+      $("requestHint").textContent = `${e.name}: ${e.message}`;
+    }
+    drawRequests();
+  };
+}
+
+// How the bytes arrived, judged from the sizes the browser reports.
+function how(e) {
+  if (e.nextHopProtocol === "" && e.transferSize === 0 && e.decodedBodySize === 0) return "hidden (other origin)";
+  if (e.transferSize === 0) return "from cache, nothing sent";
+  if (e.transferSize < e.encodedBodySize) return "checked with server: 304, body from cache";
+  return "downloaded";
+}
+
+const round = (ms) => Math.max(0, Math.round(ms));
+
+function drawRequests() {
+  const entries = [
+    ...performance.getEntriesByType("navigation"),
+    ...performance.getEntriesByType("resource"),
+  ];
+  const head = el("tr");
+  for (const h of ["request", "protocol", "status", "bytes transferred", "how", "time"]) head.append(el("th", h));
+  const rows = [head];
+  const longest = Math.max(...entries.map((e) => e.responseEnd - e.startTime), 1);
+  for (const e of entries) {
+    const tr = el("tr");
+    const name = e.entryType === "navigation" ? "this page"
+      : e.name === location.href ? "this page again (the HEAD for section 3)"
+      : e.name.replace(location.origin, "");
+    const cached = how(e).includes("cache");
+    tr.append(
+      el("td", name, "mono long"),
+      el("td", e.nextHopProtocol || (cached ? "—" : "?"), "mono"),
+      el("td", e.responseStatus || "?", "mono"),
+      el("td", String(e.transferSize), "mono"),
+      el("td", how(e)),
+    );
+    const phases = [
+      ["dns", e.domainLookupEnd - e.domainLookupStart],
+      ["connect", (e.secureConnectionStart || e.connectEnd) - e.connectStart],
+      ["tls", e.secureConnectionStart ? e.connectEnd - e.secureConnectionStart : 0],
+      ["wait", e.responseStart - e.requestStart],
+      ["download", e.responseEnd - e.responseStart],
+    ];
+    const total = e.responseEnd - e.startTime;
+    const td = el("td", `${round(total)} ms`);
+    const bar = el("div", undefined, "bar");
+    bar.style.width = `${Math.max(2, (total / longest) * 100)}%`;
+    for (const [kind, ms] of phases) {
+      if (ms <= 0) continue;
+      const span = el("span", undefined, kind);
+      span.style.flex = String(ms);
+      span.title = `${kind} ${round(ms)} ms`;
+      bar.append(span);
+    }
+    td.append(bar);
+    tr.append(td);
+    rows.push(tr);
+  }
+  $("requests").replaceChildren(...rows);
+}
+
+// ---- 3. This page's response headers ----
+
+const meanings = {
+  "accept-ranges": "The server can send part of a file (for resuming downloads, or video seeking).",
+  "access-control-allow-headers": "CORS: which request headers other origins' pages may send.",
+  "access-control-allow-origin": "CORS: which other origins' pages may read this reply.",
+  "age": "Seconds this copy has sat in a shared cache (a CDN) before reaching you.",
+  "alt-svc": "Another way to reach this server, e.g. h3=\":443\": HTTP/3 is available.",
+  "cache-control": "How long, and whether, this reply may be cached. max-age=600 means 10 minutes.",
+  "content-encoding": "How the body was compressed for the trip (gzip, br). The browser undoes it.",
+  "content-length": "Size of the body in bytes, as sent.",
+  "content-type": "What the body is: text/html, application/json, image/png, …",
+  "date": "When the server sent the reply.",
+  "etag": "A fingerprint of this version. Sent back later in if-none-match to ask \"has it changed?\"",
+  "expires": "An older way to say how long it may be cached; cache-control wins.",
+  "last-modified": "When the file last changed. Sent back later in if-modified-since.",
+  "server": "The server software, or the company running it.",
+  "set-cookie": "Asks the browser to store a cookie and send it back with later requests.",
+  "strict-transport-security": "Only ever use https for this site, for the given time.",
+  "vary": "Which request headers change the reply, so caches keep separate copies.",
+  "via": "The proxies or caches the reply passed through.",
+  "x-content-type-options": "nosniff: trust content-type, don't guess the type from the bytes.",
+};
+
+async function drawHeaders() {
+  const head = el("tr");
+  for (const h of ["header", "value", "meaning"]) head.append(el("th", h));
+  const rows = [head];
+  try {
+    const res = await fetch(location.href, { method: "HEAD", cache: "no-store" });
+    const status = el("tr");
+    status.append(el("td", "(status)", "mono"), el("td", String(res.status), "mono"),
+      el("td", "Not a header: HTTP/2 sends it as the :status pseudo-header."));
+    rows.push(status);
+    for (const [name, value] of res.headers) {
+      const tr = el("tr");
+      const meaning = meanings[name] ?? (name.startsWith("x-") ? "Custom to this server or its CDN (x- means unofficial)." : "");
+      tr.append(el("td", name, "mono long"), el("td", value, "mono long"), el("td", meaning));
+      rows.push(tr);
+    }
+  } catch (e) {
+    rows.push(el("tr", `${e.name}: ${e.message}`));
+  }
+  $("headers").replaceChildren(...rows);
+  drawRequests();
+}
+
+drawRequests();
+drawHeaders();
+</script>
+</body>
+</html>
