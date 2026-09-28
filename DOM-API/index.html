@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DOM API</title>
+<style>
+  body { font: 15px system-ui, sans-serif; max-width: 58rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.4; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 .3rem; }
+  h3 { font-size: 1rem; margin: 1rem 0 .3rem; }
+  code { font: 13px ui-monospace, monospace; }
+  .row { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; margin: .5rem 0; }
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .columns > * { min-width: 0; }
+  @media (max-width: 44rem) { .columns { grid-template-columns: 1fr; } }
+  #steps button[aria-pressed=true] { font-weight: bold; outline: 2px solid #4a7fd0; }
+  #about { background: #f4f7fc; border: 1px solid #c9d6ee; padding: .5rem .8rem; margin: .5rem 0; }
+  #code { width: 100%; box-sizing: border-box; min-height: 13rem; font: 13px ui-monospace, monospace; padding: .4rem; resize: vertical; tab-size: 2; }
+  pre { font: 12px ui-monospace, monospace; border: 1px solid #ccc; margin: 0; padding: .5rem; overflow-x: auto; }
+  #output { white-space: pre-wrap; overflow-wrap: anywhere; background: #f7f7f7; min-height: 3rem; }
+  #output.error { background: #fbe6e6; border-color: #c77; }
+  .tree { min-height: 12rem; }
+  .tree .removed { background: #fbd9d9; }
+  .tree .added { background: #d6f0d6; }
+  #playground { border: 1px solid #ccc; padding: .5rem 1rem; min-height: 13rem; }
+  #playground h2 { margin: .3rem 0; }
+  #playground .done { text-decoration: line-through; color: #888; }
+  #playground .urgent { color: crimson; font-weight: bold; }
+  #playground .card { border: 1px solid #aac; border-radius: 6px; padding: .3rem .8rem; background: #f8f8ff; }
+  #playground li { cursor: default; }
+  .hint { color: #555; font-size: 13.5px; margin: .2rem 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: .35rem .5rem; text-align: left; vertical-align: top; }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>The DOM API, 80/20</h1>
+<p>The DOM has hundreds of functions and properties, but about twenty of
+them do most everyday work: find an element, create one, attach, move or
+remove it, change its text, attributes, classes and style, and react to
+clicks. Pick a step, read the code, press <b>Run</b>, and see what it did
+to the page and to the tree. Edit the code and run your own too.
+<a href="https://github.com/backspaces/Browser/blob/main/DOM-API/README.md">Notes</a>.
+New to the DOM? Start with <a href="../DOM/">DOM</a>.</p>
+
+<div class="row" id="steps"></div>
+<div id="about"></div>
+
+<div class="columns">
+  <div>
+    <h3>Code</h3>
+    <textarea id="code" spellcheck="false" aria-label="JavaScript to run"></textarea>
+    <div class="row">
+      <button id="run">Run</button>
+      <button id="reset">Reset the page</button>
+    </div>
+    <p class="hint"><code>show(x)</code> prints <code>x</code> below.
+    It's a helper for this page, like <code>console.log</code>.</p>
+    <pre id="output"></pre>
+  </div>
+  <div>
+    <h3>The page it works on</h3>
+    <div id="playground"></div>
+    <p class="hint">Written as HTML, then changed only by the code you run.
+    <b>Reset the page</b> (or picking a step) rebuilds it from that HTML.</p>
+  </div>
+</div>
+
+<div class="columns">
+  <div>
+    <h3>Tree before Run</h3>
+    <pre class="tree" id="before"></pre>
+  </div>
+  <div>
+    <h3>Tree now</h3>
+    <pre class="tree" id="after"></pre>
+  </div>
+</div>
+<p class="hint">Red lines are gone, green lines are new. Whitespace text nodes
+are left out.</p>
+
+<h2>The short list</h2>
+<div class="scroll">
+<table>
+  <tr><th>To…</th><th>Use</th></tr>
+  <tr><td>find elements</td><td><code>document.getElementById(id)</code>, <code>document.querySelector(css)</code>, <code>document.querySelectorAll(css)</code>, <code>el.closest(css)</code></td></tr>
+  <tr><td>move around the tree</td><td><code>el.parentElement</code>, <code>el.children</code>, <code>el.firstElementChild</code>, <code>el.nextElementSibling</code>, <code>el.previousElementSibling</code></td></tr>
+  <tr><td>create</td><td><code>document.createElement(tag)</code>, <code>el.cloneNode(true)</code></td></tr>
+  <tr><td>attach, move, remove</td><td><code>parent.append(…)</code>, <code>parent.prepend(…)</code>, <code>el.before(…)</code>, <code>el.after(…)</code>, <code>el.replaceWith(…)</code>, <code>el.remove()</code>, <code>parent.replaceChildren(…)</code></td></tr>
+  <tr><td>change what's inside</td><td><code>el.textContent</code>, <code>el.innerHTML</code> (only for HTML you wrote)</td></tr>
+  <tr><td>change attributes, classes, style</td><td><code>el.id</code>, <code>el.hidden</code> and other properties, <code>el.setAttribute(name, value)</code>, <code>el.getAttribute(name)</code>, <code>el.classList.add / remove / toggle</code>, <code>el.style.color</code>, <code>el.dataset.name</code></td></tr>
+  <tr><td>react to the user</td><td><code>el.addEventListener("click", fn)</code>, <code>event.target</code></td></tr>
+</table>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// The page the steps work on, as HTML. Reset rebuilds it from this.
+const startHTML = `<section id="app">
+  <h2>Groceries</h2>
+  <ul id="todo">
+    <li class="done">milk</li>
+    <li>bread</li>
+    <li>eggs</li>
+  </ul>
+  <p id="note">Three things to buy.</p>
+</section>`;
+
+const steps = [
+  {
+    title: "Find",
+    about: "getElementById finds the one element with that id. querySelector takes any CSS selector and returns the first match; querySelectorAll returns all of them. When nothing matches, querySelector returns null.",
+    code: `const list = document.getElementById("todo");
+show(list);
+show(document.querySelector("#todo li"));      // the first match
+show(document.querySelectorAll("#todo li"));   // every match
+show(document.querySelector("#todo .done"));   // any CSS selector works
+show(document.querySelector("#nothing"));      // no match: null`,
+  },
+  {
+    title: "Walk the tree",
+    about: "Every element links to its parent, children and siblings. These properties follow those links. The ones with Element in the name skip whitespace text nodes, which is almost always what you want. closest() goes up through the parents to the nearest one that matches a selector.",
+    code: `const bread = document.querySelector("#todo li:nth-child(2)");
+show(bread);
+show(bread.parentElement);
+show(bread.previousElementSibling);
+show(bread.nextElementSibling);
+show(bread.parentElement.children);
+show(bread.closest("section"));`,
+  },
+  {
+    title: "Create and append",
+    about: "createElement makes a new element that isn't in the tree yet, so nothing is drawn. append attaches it as the last child, and it appears. Run it twice: a new element each time.",
+    code: `const li = document.createElement("li");
+li.textContent = "apples";
+document.getElementById("todo").append(li);`,
+  },
+  {
+    title: "Prepend, before, after",
+    about: "prepend attaches as the first child. before and after attach as a sibling, next to an element instead of inside it. append and prepend also take plain strings, which become text nodes.",
+    code: `const coffee = document.createElement("li");
+coffee.textContent = "coffee";
+document.getElementById("todo").prepend(coffee);
+
+const when = document.createElement("p");
+when.append("for ", "Saturday");        // strings become text nodes
+document.querySelector("#app h2").after(when);`,
+  },
+  {
+    title: "Append moves",
+    about: "A node can only be in one place in the tree. Appending one that's already there moves it; it doesn't copy it. Run it a few times and watch milk go round.",
+    code: `const list = document.getElementById("todo");
+const first = list.firstElementChild;
+list.append(first);   // already in the list: it moves to the end`,
+  },
+  {
+    title: "Copy with cloneNode",
+    about: "To get a second one, copy it first. cloneNode(true) copies the element and everything inside it. The copy isn't in the tree until it's attached.",
+    code: `const list = document.getElementById("todo");
+const copy = list.firstElementChild.cloneNode(true);
+copy.textContent += " (again)";
+list.append(copy);`,
+  },
+  {
+    title: "Remove and replace",
+    about: "remove() takes an element out of the tree. replaceWith() puts something else in its place. replaceChildren() empties an element; given arguments, it empties it and puts those in.",
+    code: `document.querySelector("#todo li:last-child").remove();
+
+const heading = document.createElement("h3");
+heading.textContent = "Nearly done";
+document.getElementById("note").replaceWith(heading);`,
+  },
+  {
+    title: "Change text",
+    about: "textContent reads or replaces all the text inside an element. Assigning to it replaces all the children with one text node. innerHTML parses HTML instead: fine for HTML you wrote, dangerous for text from users (see the DOM topic).",
+    code: `const note = document.getElementById("note");
+show(note.textContent);
+note.textContent = "Nothing left to buy.";
+
+// innerHTML parses its string as HTML: only for HTML you wrote
+document.querySelector("#app h2").innerHTML = "Groceries <small>(3)</small>";`,
+  },
+  {
+    title: "Classes and style",
+    about: "classList adds, removes and toggles CSS classes; the page's CSS decides what they look like (.done is crossed out, .urgent is red). style sets one CSS property directly; names are camelCase, so background-color is backgroundColor.",
+    code: `const bread = document.querySelector("#todo li:nth-child(2)");
+bread.classList.add("done");
+bread.classList.toggle("urgent");        // on if off, off if on
+show(bread.classList.contains("done"));
+
+const note = document.getElementById("note");
+note.style.backgroundColor = "lightyellow";
+note.style.padding = "4px";`,
+  },
+  {
+    title: "Attributes and dataset",
+    about: "Most attributes are also properties (el.id, el.hidden, el.title). setAttribute and getAttribute work for any of them. dataset reads and writes data-* attributes, your own names for your own data.",
+    code: `const eggs = document.querySelector("#todo li:nth-child(3)");
+eggs.title = "free range";                 // a property...
+eggs.setAttribute("lang", "en");           // ...or setAttribute
+eggs.dataset.qty = 12;                     // data-qty="12"
+show(eggs.getAttribute("title"));
+show(eggs.dataset.qty);                    // always comes back as a string
+
+document.getElementById("note").hidden = true;   // hide it`,
+  },
+  {
+    title: "Loop over matches",
+    about: "querySelectorAll plus a for...of loop does the same thing to every match. This is the everyday way to change many elements at once.",
+    code: `for (const li of document.querySelectorAll("#todo li")) {
+  li.classList.toggle("done");
+  li.textContent = li.textContent.toUpperCase();
+}`,
+  },
+  {
+    title: "React to clicks",
+    about: "addEventListener runs a function when something happens. One listener on the list handles clicks on every item, even items added later: event.target is what was clicked, and closest finds its li. Run this, then click items on the page.",
+    code: `document.getElementById("todo").addEventListener("click", (event) => {
+  const li = event.target.closest("li");
+  if (li) li.classList.toggle("done");
+});
+show("Now click items in the list.");`,
+  },
+  {
+    title: "Build from nothing",
+    about: "The pieces together: create elements, fill them, put them inside each other, and attach the result once. No HTML is written anywhere.",
+    code: `const card = document.createElement("article");
+card.className = "card";
+
+const title = document.createElement("h3");
+title.textContent = "Built by JavaScript";
+
+const text = document.createElement("p");
+const bold = document.createElement("b");
+bold.textContent = "none";
+text.append("HTML written for this: ", bold, ".");
+
+card.append(title, text);
+document.getElementById("app").append(card);`,
+  },
+];
+
+// ---- Drawing trees ----
+
+const voids = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
+
+// One line per node, indented by depth. Whitespace-only text is skipped.
+function lines(node, depth = 0) {
+  const pad = "  ".repeat(depth);
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent.trim() === "" ? [] : [pad + "text " + JSON.stringify(node.textContent)];
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return [];
+  const attrs = [...node.attributes].map((a) => ` ${a.name}="${a.value}"`).join("");
+  const children = [...node.childNodes].flatMap((child) => lines(child, depth + 1));
+  if (node.childNodes.length === 0 && !voids.has(node.localName)) children.push(pad + "  (no children)");
+  return [pad + "<" + node.localName + attrs + ">", ...children];
+}
+
+// Which lines of a and b are unchanged: the longest common subsequence.
+function unchanged(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const keepA = new Set(), keepB = new Set();
+  for (let i = 0, j = 0; i < a.length && j < b.length;) {
+    if (a[i] === b[j]) { keepA.add(i++); keepB.add(j++); }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+    else j++;
+  }
+  return [keepA, keepB];
+}
+
+function drawLines(pre, list, keep, mark) {
+  pre.replaceChildren(...list.map((line, i) => {
+    const span = document.createElement("span");
+    span.textContent = line + "\n";
+    if (!keep.has(i)) span.className = mark;
+    return span;
+  }));
+}
+
+let beforeLines = [];
+
+function drawTrees() {
+  const app = $("playground").firstElementChild;
+  const now = app ? lines(app) : ["(the page is empty)"];
+  const [keepA, keepB] = unchanged(beforeLines, now);
+  drawLines($("before"), beforeLines, keepA, "removed");
+  drawLines($("after"), now, keepB, "added");
+}
+
+// Redraw "Tree now" whenever anything in the playground changes, including
+// changes made later by click handlers.
+new MutationObserver(drawTrees).observe($("playground"), {
+  subtree: true, childList: true, attributes: true, characterData: true,
+});
+
+// ---- Running code ----
+
+// show(x): describe a value in the output box.
+function describe(x) {
+  if (x === null) return "null (nothing found)";
+  if (x === undefined) return "undefined";
+  if (x instanceof Element) {
+    const attrs = [...x.attributes].map((a) => ` ${a.name}="${a.value}"`).join("");
+    const text = x.textContent.trim().replace(/\s+/g, " ");
+    return `<${x.localName}${attrs}>` + (text ? `  "${text.length > 40 ? text.slice(0, 40) + "…" : text}"` : "");
+  }
+  if (x instanceof NodeList || x instanceof HTMLCollection) {
+    return `${x.constructor.name}(${x.length}) [\n` + [...x].map((n) => "  " + describe(n)).join("\n") + "\n]";
+  }
+  if (typeof x === "string") return JSON.stringify(x);
+  return String(x);
+}
+
+let shown = [];
+function show(x) {
+  shown.push(describe(x));
+}
+
+function run() {
+  beforeLines = lines($("playground").firstElementChild ?? document.createElement("div"));
+  shown = [];
+  $("output").className = "";
+  try {
+    new Function("show", $("code").value)(show); // run the text as code
+    $("output").textContent = shown.join("\n") || "(ran; nothing shown)";
+  } catch (e) {
+    shown.push(`${e.name}: ${e.message}`);
+    $("output").textContent = shown.join("\n");
+    $("output").className = "error";
+  }
+  drawTrees();
+}
+
+function reset() {
+  $("playground").innerHTML = startHTML; // HTML we wrote ourselves
+  beforeLines = lines($("playground").firstElementChild);
+  $("output").textContent = "";
+  $("output").className = "";
+  drawTrees();
+}
+
+function pickStep(i) {
+  const step = steps[i];
+  $("code").value = step.code;
+  $("about").textContent = `${i + 1}. ${step.title}: ${step.about}`;
+  for (const [j, b] of [...$("steps").children].entries()) b.setAttribute("aria-pressed", j === i);
+  reset();
+}
+
+$("steps").append(...steps.map((step, i) => {
+  const b = document.createElement("button");
+  b.textContent = `${i + 1}. ${step.title}`;
+  b.onclick = () => pickStep(i);
+  return b;
+}));
+$("run").onclick = run;
+$("reset").onclick = reset;
+
+pickStep(0);
+</script>
+</body>
+</html>

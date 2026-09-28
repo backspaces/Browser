@@ -41,6 +41,10 @@ explains it.
   has no closing tags); seeing it in DevTools; building it with
   `createElement`, and why `textContent` is safe where `innerHTML` isn't.
   ([try it](https://backspaces.github.io/Browser/DOM/))
+- [DOM API](DOM-API/): the twenty or so DOM functions that do most
+  everyday work (find, walk, create, attach and move, text, attributes,
+  classes, style, clicks), each runnable against a small page with a
+  before/after tree. ([try it](https://backspaces.github.io/Browser/DOM-API/))
 - [HTTP](HTTP/): the protocol under it all. Requests and responses,
   methods, status codes, headers and caching, and how HTTP/1.1's text
   became HTTP/2 and 3's binary frames.

@@ -199,9 +199,9 @@ HTML attributes show up as JavaScript properties on the element:
 `class="me"` is `el.className`. The class property has a different name
 because `class` is a reserved word in JavaScript.
 
-These few functions are enough for a lot. A later topic covers the rest
-of the everyday toolkit: moving and copying nodes, attributes, classes
-and styles.
+These few functions are enough for a lot. [DOM API](../DOM-API/) covers
+the rest of the everyday toolkit: finding and walking, moving and copying
+nodes, attributes, classes, styles and clicks.
 
 ## `textContent` vs `innerHTML`
 
