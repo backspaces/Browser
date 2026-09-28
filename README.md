@@ -37,7 +37,8 @@ JavaScript, but it gets its own topic because so much depends on it.
 One folder per topic: `index.html` is the working example, `README.md`
 explains it.
 
-- [DOM](DOM/): the page as a tree of objects; building it with
+- [DOM](DOM/): how HTML text becomes a tree of objects (and why the tree
+  has no closing tags); seeing it in DevTools; building it with
   `createElement`, and why `textContent` is safe where `innerHTML` isn't.
   ([try it](https://backspaces.github.io/Browser/DOM/))
 - [HTTP](HTTP/): the protocol under it all. Requests and responses,

@@ -5,98 +5,274 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DOM</title>
 <style>
-  body { font: 15px system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.4; }
+  body { font: 15px system-ui, sans-serif; max-width: 56rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.4; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 .3rem; }
+  h3 { font-size: 1rem; margin: 1rem 0 .3rem; }
+  code { font: 13px ui-monospace, monospace; }
   .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .5rem 0; }
-  #text { flex: 1; min-width: 16rem; font: 13px ui-monospace, monospace; padding: .3rem; }
   .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .columns > * { min-width: 0; }
   @media (max-width: 40rem) { .columns { grid-template-columns: 1fr; } }
-  h2 { font-size: 1rem; margin: 1rem 0 .3rem; }
-  #list, #tree { border: 1px solid #ccc; min-height: 10rem; margin: 0; }
-  #list { padding: .5rem 1.5rem; }
-  #tree { font: 12px ui-monospace, monospace; padding: .5rem; overflow-x: auto; }
+  .hint { color: #555; font-size: 13.5px; margin: .2rem 0; }
+  #source { width: 100%; box-sizing: border-box; min-height: 14rem; font: 13px ui-monospace, monospace; padding: .4rem; resize: vertical; }
+  #rendered { width: 100%; box-sizing: border-box; height: 14rem; border: 1px solid #ccc; background: #fff; }
+  pre.tree, #back { border: 1px solid #ccc; margin: 0; font: 12px ui-monospace, monospace; padding: .5rem; overflow-x: auto; }
+  pre.tree { min-height: 14rem; }
+  #back { white-space: pre-wrap; word-break: break-all; background: #f7f7f7; }
+  #text { flex: 1; min-width: 16rem; font: 13px ui-monospace, monospace; padding: .3rem; }
+  #stage { border: 1px solid #ccc; min-height: 10rem; padding: .5rem; }
+  #stage ul { margin: 0; padding-left: 1.5rem; }
+  #tree { min-height: 10rem; }
+  pre.src { font: 12.5px ui-monospace, monospace; background: #f4f4f4; border: 1px solid #ddd; padding: .4rem .5rem; margin: .3rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   #ran { background: #fdd; border: 1px solid #c33; padding: .5rem; }
 </style>
 </head>
 <body>
 <h1>The DOM</h1>
-<p>The browser reads HTML text once, turns it into a tree of objects (the
-Document Object Model), and draws the page from that tree. From then on,
-JavaScript changes the page by changing the tree. Add some items and watch
-both sides. <a href="https://github.com/backspaces/Browser/blob/main/DOM/README.md">Notes</a>.</p>
+<p>The browser reads a page's HTML text once and turns it into a tree of
+objects in memory, the Document Object Model. It draws the page from those
+objects, and JavaScript changes the page by changing them. The HTML text
+itself is then set aside.
+<a href="https://github.com/backspaces/Browser/blob/main/DOM/README.md">Notes</a>.</p>
+
+<h2>1. HTML in, DOM out</h2>
+<p>Type or edit HTML on the left. The browser's parser turns it into the
+tree on the right, the same way it does for a whole page. The tree has no
+closing tags, because objects don't need them: indentation shows what's
+inside what.</p>
+<div class="row">
+  Try:
+  <button data-sample="starter">Unclosed tags</button>
+  <button data-sample="text">Just text</button>
+  <button data-sample="table">A table</button>
+  <button data-sample="misnested">Misnested tags</button>
+  <button data-sample="comment">A comment</button>
+  <label><input type="checkbox" id="spaces1"> show whitespace text nodes</label>
+</div>
+<p class="hint" id="sampleHint"></p>
+<div class="columns">
+  <div>
+    <h3>HTML (text you write)</h3>
+    <textarea id="source" spellcheck="false" aria-label="HTML source"></textarea>
+  </div>
+  <div>
+    <h3>DOM (objects the parser built)</h3>
+    <pre class="tree" id="domTree"></pre>
+  </div>
+</div>
+<div class="columns">
+  <div>
+    <h3>Drawn from the DOM</h3>
+    <iframe id="rendered" sandbox title="The HTML, drawn"></iframe>
+  </div>
+  <div>
+    <h3>Back to HTML</h3>
+    <p class="hint">The tree written out again as text
+    (<code>outerHTML</code>). Every closing tag here was generated, not
+    remembered. Compare it with what you typed.</p>
+    <pre id="back"></pre>
+  </div>
+</div>
+
+<h2>2. Building the DOM from JavaScript</h2>
+<p>Section 1 built a tree from HTML text. Here JavaScript builds one with
+no HTML at all, by calling DOM functions. The only thing written in this
+page's HTML is an empty <code>&lt;div id="stage"&gt;</code> to build in.
+Each button runs the JavaScript it adds to <b>Code run so far</b>, exactly
+as written there.</p>
 
 <div class="row">
-  <input id="text" value="<b>bold</b> text" aria-label="Item text">
+  <button id="create">1. Create the list</button>
+  <button id="first">2. Add the first item</button>
+</div>
+<div class="row">
+  3. Add more:
+  <input id="text" value="<b>bold</b> and plain" aria-label="Item text">
 </div>
 <div class="row">
   <button id="safe">Add with textContent</button>
   <button id="unsafe">Add with innerHTML</button>
   <button id="sneaky">Load a sneaky one</button>
-  <button id="clear">Clear</button>
-  <label><input type="checkbox" id="spaces"> show whitespace text nodes</label>
+</div>
+<div class="row">
+  <button id="clear">Clear the items</button>
+  <button id="removeList">Remove the list</button>
+  <label><input type="checkbox" id="spaces2"> show whitespace text nodes</label>
 </div>
 <p id="ran" hidden>⚠ Code hidden in that text just ran. <code>innerHTML</code>
 let it in; <code>textContent</code> would have shown it as plain text.</p>
 
 <div class="columns">
   <div>
-    <h2>The page</h2>
-    <ul id="list">
-      <li>first item</li>
-    </ul>
+    <h3>The page</h3>
+    <div id="stage"></div>
   </div>
   <div>
-    <h2>The tree behind it</h2>
-    <pre id="tree"></pre>
+    <h3>The tree behind it</h3>
+    <pre class="tree" id="tree"></pre>
   </div>
 </div>
+<h3>Code run so far</h3>
+<p class="hint">Each block runs on its own, as a separate function. That's
+why every block finds the list again with <code>getElementById</code>, and
+why each can have its own <code>const li</code>.</p>
+<pre class="src" id="log"></pre>
+<div class="row"><button id="clearLog">Clear this log</button></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const list = $("list");
 
-// Build a new <li>, fill it one of two ways, and attach it to the list.
-function addItem(how) {
-  const li = document.createElement("li");
-  if (how === "text") li.textContent = $("text").value;
-  else li.innerHTML = $("text").value;
-  list.append(li);
-  drawTree();
-}
-
-$("safe").onclick = () => addItem("text");
-$("unsafe").onclick = () => addItem("html");
-$("sneaky").onclick = () => {
-  $("text").value =
-    `<img src="nope" onerror="document.getElementById('ran').hidden = false">`;
-};
-$("clear").onclick = () => {
-  list.replaceChildren();
-  $("ran").hidden = true;
-  drawTree();
-};
-$("spaces").onchange = () => drawTree();
+// Elements that can never have children, like <img>.
+const voids = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
 
 // One line per node, indented by depth: elements as <tag>, text nodes
-// as the exact string they hold.
-function lines(node, depth) {
+// as the exact string they hold. The indentation is the nesting.
+function lines(node, depth, spaces) {
   const pad = "  ".repeat(depth);
   if (node.nodeType === Node.TEXT_NODE) {
     const blank = node.textContent.trim() === "";
-    if (blank && !$("spaces").checked) return [];
+    if (blank && !spaces) return [];
     return [pad + "text " + JSON.stringify(node.textContent)];
+  }
+  if (node.nodeType === Node.COMMENT_NODE) {
+    return [pad + "comment " + JSON.stringify(node.textContent)];
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return [pad + node.nodeName];
   const attrs = [...node.attributes]
     .map((a) => ` ${a.name}="${a.value}"`)
     .join("");
-  const children = [...node.childNodes].flatMap((child) => lines(child, depth + 1));
+  const children = [...node.childNodes].flatMap((child) => lines(child, depth + 1, spaces));
+  if (node.childNodes.length === 0 && !voids.has(node.localName)) {
+    children.push(pad + "  (no children)");
+  }
   return [pad + "<" + node.localName + attrs + ">", ...children];
 }
 
-function drawTree() {
-  $("tree").textContent = lines(list, 0).join("\n");
+// ---- 1. HTML in, DOM out ----
+
+const samples = {
+  starter: {
+    html: `<h1>Hello</h1>
+<p>One paragraph
+<p>Another, with <b>bold</b> in it
+<ul>
+  <li>first
+  <li>second
+</ul>`,
+    hint: "No </p> or </li> anywhere, yet the tree has separate p and li elements: the parser decided where each one ends. It also added <html>, <head> and <body>, which nobody typed.",
+  },
+  text: {
+    html: "hello",
+    hint: "Not a single tag, and still a full document: html, head and body elements, with one text node in the body.",
+  },
+  table: {
+    html: `<table>
+  <tr><td>a</td><td>b</td></tr>
+</table>`,
+    hint: "The parser always puts table rows inside a <tbody>, so one appears in the DOM that isn't in the HTML.",
+  },
+  misnested: {
+    html: "<p><b>bold <i>both</b> italic?</i></p>",
+    hint: "The tags overlap, which a tree can't. The parser closes and reopens <i> so every element sits neatly inside its parent: \"italic?\" ends up in a second <i>.",
+  },
+  comment: {
+    html: `<p>Before</p>
+<!-- a note for humans -->
+<p>After</p>`,
+    hint: "Comments are nodes too. They're in the tree, but nothing is drawn for them.",
+  },
+};
+
+function showSample(name) {
+  $("source").value = samples[name].html;
+  $("sampleHint").textContent = samples[name].hint;
+  parse();
 }
 
+// Parse the text in a detached document. DOMParser never runs scripts or
+// event handlers, so any HTML typed here is safe to look at.
+function parse() {
+  const html = $("source").value;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  $("domTree").textContent = lines(doc.documentElement, 0, $("spaces1").checked).join("\n");
+  $("back").textContent = doc.documentElement.outerHTML;
+  $("rendered").srcdoc = html; // sandboxed: drawn, but no scripts run
+}
+
+for (const b of document.querySelectorAll("[data-sample]")) {
+  b.onclick = () => showSample(b.dataset.sample);
+}
+$("source").oninput = () => {
+  $("sampleHint").textContent = "";
+  parse();
+};
+$("spaces1").onchange = parse;
+
+showSample("starter");
+
+// ---- 2. Building the DOM from JavaScript ----
+
+const stage = $("stage");
+
+// The code each button runs, as text. run() executes exactly this text,
+// so the log always shows the real code.
+const snippets = {
+  create: () => `const list = document.createElement("ul");
+list.id = "list";
+document.getElementById("stage").append(list);`,
+  first: () => `const li = document.createElement("li");
+li.textContent = "first item";
+document.getElementById("list").append(li);`,
+  add: (property) => `const li = document.createElement("li");
+li.${property} = ${JSON.stringify($("text").value)};
+document.getElementById("list").append(li);`,
+  clear: () => `document.getElementById("list").replaceChildren();`,
+  removeList: () => `document.getElementById("list").remove();`,
+};
+
+function run(title, code) {
+  new Function(code)(); // turn the text into a function and call it
+  const log = $("log");
+  if (log.dataset.empty) log.textContent = "";
+  delete log.dataset.empty;
+  log.textContent += (log.textContent ? "\n\n" : "") + `// ${title}\n${code}`;
+  drawTree();
+}
+
+$("create").onclick = () => run("1. Create the list", snippets.create());
+$("first").onclick = () => run("2. Add the first item", snippets.first());
+$("safe").onclick = () => run("Add with textContent", snippets.add("textContent"));
+$("unsafe").onclick = () => run("Add with innerHTML", snippets.add("innerHTML"));
+$("clear").onclick = () => {
+  $("ran").hidden = true;
+  run("Clear the items: the <ul> stays", snippets.clear());
+};
+$("removeList").onclick = () => {
+  $("ran").hidden = true;
+  run("Remove the list itself", snippets.removeList());
+};
+$("sneaky").onclick = () => {
+  $("text").value =
+    `<img src="nope" onerror="document.getElementById('ran').hidden = false">`;
+};
+$("clearLog").onclick = clearLog;
+$("spaces2").onchange = () => drawTree();
+
+function clearLog() {
+  $("log").textContent = "(nothing yet: start with 1)";
+  $("log").dataset.empty = "yes";
+}
+
+// Draw the stage's tree, and enable only the buttons that make sense:
+// no adding before the list exists, no second list.
+function drawTree() {
+  $("tree").textContent = lines(stage, 0, $("spaces2").checked).join("\n");
+  const exists = $("list") !== null;
+  $("create").disabled = exists;
+  for (const id of ["first", "safe", "unsafe", "clear", "removeList"]) $(id).disabled = !exists;
+}
+
+clearLog();
 drawTree();
 </script>
 </body>
