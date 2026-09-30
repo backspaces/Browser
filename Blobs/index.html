@@ -58,7 +58,7 @@ Offset, then each byte in hex, then the same bytes as characters
 that takes a URL can use it: an <code>&lt;img src&gt;</code>, a link, a
 video. The bytes never leave the browser. The URL only points into this
 page's memory.</p>
-<pre class="wrap" id="blobUrl">(pick a file above)</pre>
+<pre class="wrap" id="blobUrl">(pick a file in section 1: its URL appears here)</pre>
 <div id="preview"></div>
 <p class="hint">A <code>blob:</code> URL lasts only as long as the page that made
 it. Reload this page and the old URL points to nothing: the bytes were in
@@ -206,7 +206,12 @@ async function inspect(file) {
   // Section 2: give it a URL and preview it.
   if (fileUrl) URL.revokeObjectURL(fileUrl); // free the previous one
   fileUrl = URL.createObjectURL(file);
-  $("blobUrl").textContent = fileUrl;
+  $("blobUrl").textContent = `// file: the one picked in section 1
+//   name "${file.name}", ${size(file.size)}, type "${file.type}"
+const url = URL.createObjectURL(file);
+
+// url is now:
+${fileUrl}`;
   await preview(file, fileUrl, found, !first.includes(0));
 }
 
