@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blobs</title>
+<style>
+  body { font: 15px system-ui, sans-serif; max-width: 56rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.4; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 .3rem; }
+  h3 { font-size: 1rem; margin: 1rem 0 .3rem; }
+  code, pre, textarea, input[type=text], select { font: 12.5px ui-monospace, monospace; }
+  pre { margin: .3rem 0; padding: .4rem .5rem; background: #f4f4f4; border: 1px solid #ddd; overflow-x: auto; }
+  pre.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .5rem 0; }
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .columns > * { min-width: 0; }
+  @media (max-width: 44rem) { .columns { grid-template-columns: 1fr; } }
+  #drop { border: 2px dashed #99a; border-radius: 8px; padding: 1.2rem; text-align: center; color: #555; }
+  #drop.over { background: #eef3ff; border-color: #4a7fd0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: .3rem .5rem; text-align: left; vertical-align: top; }
+  td.mono { font: 12.5px ui-monospace, monospace; overflow-wrap: anywhere; }
+  #preview { border: 1px solid #ccc; min-height: 6rem; padding: .5rem; }
+  #preview img, #preview video { max-width: 100%; max-height: 20rem; }
+  #preview iframe { width: 100%; height: 20rem; border: 0; }
+  #note { border: 1px solid; padding: .5rem .8rem; margin: .5rem 0; }
+  .ok { background: #e6f4e6; border-color: #7a7; }
+  .warn { background: #fdf3dc; border-color: #c9a33a; }
+  #makeText { width: 100%; box-sizing: border-box; min-height: 6rem; padding: .3rem; }
+  canvas { border: 1px solid #ccc; max-width: 100%; }
+  .hint { color: #555; font-size: 13.5px; margin: .2rem 0; }
+</style>
+</head>
+<body>
+<h1>Blobs and files</h1>
+<p>A <b>Blob</b> is the browser's container for raw bytes: a chunk of data
+plus a type, like <code>image/png</code>. It's how a page handles anything
+that isn't text or JSON, such as images, audio, PDFs and zip files. A
+<b>File</b> is a Blob with a name. Nothing you pick or drop here leaves your
+computer: it all happens inside this page.
+<a href="https://github.com/backspaces/Browser/blob/main/Blobs/README.md">Notes</a>.</p>
+
+<h2>1. A File is a Blob</h2>
+<div id="drop">
+  Drop a file here, or <input type="file" id="picker" aria-label="Pick a file">
+</div>
+<p id="note" hidden></p>
+<h3>What the browser knows</h3>
+<div style="overflow-x: auto"><table id="facts"><tr><td>(pick a file)</td></tr></table></div>
+<h3>Its first bytes</h3>
+<pre id="hex">(pick a file)</pre>
+<p class="hint">From <code>await file.slice(0, 64).arrayBuffer()</code>.
+Offset, then each byte in hex, then the same bytes as characters
+(<code>.</code> where there's no printable one).</p>
+
+<h2>2. Blob URLs</h2>
+<p><code>URL.createObjectURL(file)</code> gives the Blob a URL, so anything
+that takes a URL can use it: an <code>&lt;img src&gt;</code>, a link, a
+video. The bytes never leave the browser. The URL only points into this
+page's memory.</p>
+<pre class="wrap" id="blobUrl">(pick a file above)</pre>
+<div id="preview"></div>
+<p class="hint">A <code>blob:</code> URL lasts only as long as the page that made
+it. Reload this page and the old URL points to nothing: the bytes were in
+this page's memory, and they're gone.</p>
+
+<h2>3. Make your own Blob</h2>
+<div class="columns">
+  <div>
+    <textarea id="makeText" aria-label="Text for the blob">name,count
+apples,3
+bread,1</textarea>
+    <div class="row">
+      <select id="makeType" aria-label="Type">
+        <option>text/csv</option><option>text/plain</option>
+        <option>text/html</option><option>application/json</option>
+      </select>
+      <input type="text" id="makeName" value="groceries.csv" aria-label="File name">
+    </div>
+    <div class="row">
+      <a id="download" href="#">Download it</a>
+      <a id="open" href="#" target="_blank">Open it in a new tab</a>
+    </div>
+  </div>
+  <div>
+    <pre id="makeCode" class="wrap"></pre>
+  </div>
+</div>
+
+<h2>4. Blobs from elsewhere</h2>
+<div class="columns">
+  <div>
+    <h3>A canvas, as a PNG</h3>
+    <canvas id="canvas" width="240" height="120"></canvas>
+    <div class="row">
+      <button id="draw">Draw something</button>
+      <a id="pngLink" href="#" download="drawing.png">Download PNG</a>
+    </div>
+    <pre id="pngInfo"></pre>
+  </div>
+  <div>
+    <h3>A fetch reply, as a Blob</h3>
+    <div class="row"><button id="fetchIt">fetch("../README.md")</button></div>
+    <pre id="fetchInfo" class="wrap"></pre>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function el(tag, text) {
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+// ---- helpers ----
+
+// 1536 -> "1.5 KB"
+function size(n) {
+  if (n < 1024) return `${n} bytes`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB (${n} bytes)`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB (${n} bytes)`;
+}
+
+// Bytes as lines of: offset, 16 hex bytes, the same as characters.
+function hexdump(bytes) {
+  const out = [];
+  for (let i = 0; i < bytes.length; i += 16) {
+    const row = [...bytes.slice(i, i + 16)];
+    const hex = row.map((b) => b.toString(16).padStart(2, "0")).join(" ");
+    const chars = row.map((b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : ".")).join("");
+    out.push(`${i.toString(16).padStart(4, "0")}  ${hex.padEnd(47)}  ${chars}`);
+  }
+  return out.join("\n") || "(empty file)";
+}
+
+// Many formats start with fixed "magic" bytes that say what they are.
+const magic = [
+  [[0x89, 0x50, 0x4e, 0x47], "a PNG image", "image/png"],
+  [[0xff, 0xd8, 0xff], "a JPEG image", "image/jpeg"],
+  [[0x47, 0x49, 0x46, 0x38], "a GIF image", "image/gif"],
+  [[0x25, 0x50, 0x44, 0x46], "a PDF", "application/pdf"],
+  [[0x50, 0x4b, 0x03, 0x04], "a zip archive (also .docx, .xlsx, .epub…)", "application/zip"],
+  [[0x52, 0x49, 0x46, 0x46], "a RIFF file (WAV audio, WebP image, AVI video)", ""],
+  [[0x1f, 0x8b], "gzip-compressed data", "application/gzip"],
+];
+
+function sniff(bytes) {
+  for (const [start, what, type] of magic) {
+    if (start.every((b, i) => bytes[i] === b)) return { what, type };
+  }
+  return null;
+}
+
+// The chain of classes an object inherits from: File -> Blob -> Object.
+function chain(obj) {
+  const names = [];
+  for (let p = Object.getPrototypeOf(obj); p; p = Object.getPrototypeOf(p)) {
+    names.push(p.constructor.name);
+  }
+  return names.join(" → ");
+}
+
+// ---- 1 and 2: a file ----
+
+let fileUrl; // the current blob: URL, revoked when replaced
+
+async function inspect(file) {
+  const first = new Uint8Array(await file.slice(0, 64).arrayBuffer());
+  const found = sniff(first);
+
+  const facts = [
+    ["file instanceof Blob", String(file instanceof Blob)],
+    ["file instanceof File", String(file instanceof File)],
+    ["class chain", chain(file)],
+    ["file.name", file.name],
+    ["file.size", size(file.size)],
+    ["file.type", file.type || '"" (the browser has no guess)'],
+    ["file.lastModified", new Date(file.lastModified).toLocaleString()],
+  ];
+  $("facts").replaceChildren(...facts.map(([k, v]) => {
+    const tr = el("tr");
+    const td = el("td", v);
+    td.className = "mono";
+    tr.append(el("th", k), td);
+    return tr;
+  }));
+  $("hex").textContent = hexdump(first);
+
+  // Compare the type guessed from the name with what the bytes say.
+  const note = $("note");
+  note.hidden = false;
+  if (!found) {
+    note.className = "ok";
+    note.textContent = `file.type was guessed from the name ("${file.name}"), not from the contents. These first bytes don't match any format this page knows` +
+      (first.includes(0) ? "." : ", which is normal for text: text files have no magic bytes.");
+  } else if (found.type && file.type !== found.type) {
+    note.className = "warn";
+    note.textContent = `The first bytes say this is ${found.what}, but file.type says "${file.type || "nothing"}". The browser guessed the type from the file name, and never looked inside.`;
+  } else {
+    note.className = "ok";
+    note.textContent = `The first bytes say this is ${found.what}, and file.type agrees. But the type came from the file name: rename a .png to .txt and file.type changes while the bytes don't.`;
+  }
+
+  // Section 2: give it a URL and preview it.
+  if (fileUrl) URL.revokeObjectURL(fileUrl); // free the previous one
+  fileUrl = URL.createObjectURL(file);
+  $("blobUrl").textContent = fileUrl;
+  await preview(file, fileUrl, found, !first.includes(0));
+}
+
+// looksText: no zero bytes at the start, which text files never have.
+async function preview(file, url, found, looksText) {
+  const box = $("preview");
+  const type = found?.type || file.type;
+  let shown;
+  if (type.startsWith("image/")) {
+    shown = el("img");
+    shown.src = url;
+    shown.alt = file.name;
+  } else if (type.startsWith("video/") || type.startsWith("audio/")) {
+    shown = el(type.startsWith("video/") ? "video" : "audio");
+    shown.src = url;
+    shown.controls = true;
+  } else if (type === "application/pdf") {
+    shown = el("iframe");
+    shown.src = url;
+    shown.title = file.name;
+  } else if (type.startsWith("text/") || type === "application/json" || (!found && looksText && file.size < 200_000)) {
+    const text = await file.text();
+    shown = el("pre", text.length > 3000 ? text.slice(0, 3000) + "\n…" : text);
+    shown.className = "wrap";
+  } else {
+    shown = el("p", "No preview for this type, but the link works: ");
+    const a = el("a", `download ${file.name}`);
+    a.href = url;
+    a.download = file.name;
+    shown.append(a);
+  }
+  box.replaceChildren(shown);
+}
+
+$("picker").onchange = () => {
+  if ($("picker").files[0]) inspect($("picker").files[0]);
+};
+
+const drop = $("drop");
+drop.ondragover = (e) => {
+  e.preventDefault(); // allow dropping here
+  drop.classList.add("over");
+};
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = (e) => {
+  e.preventDefault(); // don't let the browser open the file itself
+  drop.classList.remove("over");
+  if (e.dataTransfer.files[0]) inspect(e.dataTransfer.files[0]);
+};
+
+// ---- 3: make your own ----
+
+let madeUrl;
+
+function make() {
+  const text = $("makeText").value;
+  const type = $("makeType").value;
+  const name = $("makeName").value || "blob.txt";
+  const blob = new Blob([text], { type });
+  if (madeUrl) URL.revokeObjectURL(madeUrl);
+  madeUrl = URL.createObjectURL(blob);
+  $("download").href = madeUrl;
+  $("download").download = name;
+  $("open").href = madeUrl;
+  $("makeCode").textContent = `const blob = new Blob([text], { type: ${JSON.stringify(type)} });
+blob.size    // ${blob.size} bytes (UTF-8)
+blob.type    // ${JSON.stringify(blob.type)}
+
+const url = URL.createObjectURL(blob);
+// ${madeUrl}
+
+const a = document.createElement("a");
+a.href = url;
+a.download = ${JSON.stringify(name)};  // save instead of open
+a.click();`;
+}
+
+$("makeText").oninput = make;
+$("makeType").onchange = () => {
+  const ext = { "text/csv": "csv", "text/plain": "txt", "text/html": "html", "application/json": "json" }[$("makeType").value];
+  $("makeName").value = $("makeName").value.replace(/\.[^.]*$/, "") + "." + ext;
+  make();
+};
+$("makeName").oninput = make;
+make();
+
+// ---- 4: a canvas and a fetch ----
+
+let pngUrl;
+
+function draw() {
+  const ctx = $("canvas").getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, 240, 120);
+  for (let i = 0; i < 12; i++) {
+    ctx.fillStyle = `hsl(${Math.random() * 360} 70% 55%)`;
+    ctx.beginPath();
+    ctx.arc(Math.random() * 240, Math.random() * 120, 6 + Math.random() * 20, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  $("canvas").toBlob(async (blob) => {
+    if (pngUrl) URL.revokeObjectURL(pngUrl);
+    pngUrl = URL.createObjectURL(blob);
+    $("pngLink").href = pngUrl;
+    const first = new Uint8Array(await blob.slice(0, 16).arrayBuffer());
+    $("pngInfo").textContent = `canvas.toBlob(callback, "image/png")
+blob.type  "${blob.type}"
+blob.size  ${size(blob.size)}
+first bytes:
+${hexdump(first)}`;
+  }, "image/png");
+}
+
+$("draw").onclick = draw;
+draw();
+
+$("fetchIt").onclick = async () => {
+  const res = await fetch("../README.md");
+  const blob = await res.blob();
+  const text = await blob.text();
+  $("fetchInfo").textContent = `const res = await fetch("../README.md");
+const blob = await res.blob();
+blob instanceof Blob  ${blob instanceof Blob}
+blob.type  "${blob.type}"   (from the reply's content-type)
+blob.size  ${size(blob.size)}
+
+await blob.text() starts:
+${text.slice(0, 200)}…`;
+};
+</script>
+</body>
+</html>

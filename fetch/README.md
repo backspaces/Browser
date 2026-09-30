@@ -48,7 +48,7 @@ const data = await res.json();
   extra headers. The common options:
   - `method`: `"GET"` if left out.
   - `headers`: a plain object, `{ "content-type": "application/json" }`.
-  - `body`: a string, or form data, a `Blob` and so on. **Not allowed
+  - `body`: a string, or form data, a [`Blob`](../Blobs/) and so on. **Not allowed
     with GET or HEAD**: `fetch` throws before sending, so their data goes
     in the query string instead.
   - `cache`, `credentials`, `mode`: how to use the HTTP cache, cookies,
@@ -110,7 +110,8 @@ const res = await fetch(req);
 A `Response` is the reply. It has:
 - `.status` and `.ok`;
 - `.headers`;
-- the body readers `.json()`, `.text()` and `.blob()`;
+- the body readers `.json()`, `.text()` and `.blob()` (see
+  [Blobs](../Blobs/));
 - `.type`: `"basic"` for a same-origin reply, `"cors"` for a
   cross-origin reply CORS allowed, and `"opaque"` for an unreadable
   `no-cors` one.

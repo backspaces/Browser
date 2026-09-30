@@ -52,6 +52,9 @@ explains it.
 - [fetch](fetch/): speaking HTTP from JavaScript. `fetch()`, `URL`,
   `Headers`, `Request` and `Response`, and why a 404 doesn't make `fetch`
   fail. ([try it](https://backspaces.github.io/Browser/fetch/))
+- [Blobs](Blobs/): raw bytes in the browser. A `File` is a `Blob` with
+  a name, `blob:` URLs point at them, and `file.type` is only a guess
+  from the name. ([try it](https://backspaces.github.io/Browser/Blobs/))
 - [CORS](CORS/): why a page can send to any site but only read replies from
   sites that allow it; each `access-control-*` header and its common
   values, with real requests that succeed and fail on purpose.
