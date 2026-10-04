@@ -59,6 +59,10 @@ explains it.
   sites that allow it; each `access-control-*` header and its common
   values, with real requests that succeed and fail on purpose.
   ([try it](https://backspaces.github.io/Browser/CORS/))
+- [REST](REST/): designing an HTTP API so URLs name things and methods
+  say what to do. `PUT` versus `POST`, status codes that carry meaning,
+  one URL in several formats, and REST versus RPC, against a small live
+  API on val.town. ([try it](https://backspaces.github.io/Browser/REST/))
 
 Planned, roughly in order: events and forms, storage, modules,
 page lifecycle, CSS layout (flex, then grid), canvas.
