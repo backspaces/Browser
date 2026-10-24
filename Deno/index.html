@@ -29,9 +29,9 @@ a <code>Request</code> goes in, a <code>Response</code> comes out, the same clas
 Same file, same answers; only <code>ranIn</code> differs.
 <a href="https://github.com/backspaces/Browser/blob/main/Deno/README.md">Notes</a>.</p>
 
-<p class="hint">For the right-hand column, start the server from the repo folder:
-<code>deno serve --port 8001 Deno/server.js</code>.
-The left-hand column needs nothing.</p>
+<p class="hint">The left column needs nothing. For the right one, run this in a terminal, in any folder:
+<code>deno serve --port 8001 https://backspaces.github.io/Browser/Deno/server.js</code>
+(or <code>deno serve --port 8001 Deno/server.js</code> from a clone of the repo).</p>
 
 <div class="row">
   Try:
@@ -115,7 +115,7 @@ async function send() {
     verdict("ok", "Both answered from the same server.js. Compare them: everything matches except ranIn (and the time or the roll, which change on every call). The handler only knows it got a Request and must return a Response; who called it doesn't matter.");
   } catch (e) {
     $("deno").textContent = `(no answer)\n${e.name}: ${e.message}`;
-    verdict("warn", "The page's copy answered, but nothing answered at localhost:8001. Start the server with deno serve --port 8001 Deno/server.js, then try again. If it is running, your browser may be blocking a public page from calling your own computer; open this page from a local file server instead (see Notes).");
+    verdict("warn", "The page's copy answered, but nothing answered at localhost:8001. Start the server (the command above), then try again. If it is running, your browser may be blocking a public page from calling your own computer; run everything locally instead, as Notes explains under Running it.");
   }
 }
 

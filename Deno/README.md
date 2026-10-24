@@ -90,20 +90,35 @@ a three-line entry file and nothing else.
 
 ### Running it
 
-From the repo folder, in two terminals:
+The left column always works: it needs only the page. The right column
+needs Deno running `server.js` on your computer, at port 8001. There are
+two ways to try it.
+
+**1. The live page, plus one command.** Open
+[the live page](https://backspaces.github.io/Browser/Deno/), and in a
+terminal, in any folder, run:
 
 ```sh
-deno run -A jsr:@std/http/file-server     # the pages, at http://localhost:8000
-deno serve --port 8001 Deno/server.js
+deno serve --port 8001 https://backspaces.github.io/Browser/Deno/server.js
 ```
 
-Then open http://localhost:8000/Deno/. Both default to port 8000, hence
-`--port 8001`.
+Nothing to clone: Deno downloads `server.js` from that address and serves
+it, which is itself a Deno feature. One catch: browsers are wary of a
+public site calling your own computer. Some ask permission first, some
+refuse. If the right column says nothing answered while the server is
+running, use the second way.
 
-The live page on GitHub Pages works too, for the left column always and
-for the right one if your browser lets a public site call your own
-computer. Some ask first, some refuse; the local file server avoids the
-question.
+**2. Everything local.** From a clone of this repo, in two terminals:
+
+```sh
+deno run -A jsr:@std/http/file-server     # serves the pages, at http://localhost:8000
+deno serve --port 8001 Deno/server.js     # the demo server, at http://localhost:8001
+```
+
+Then open http://localhost:8000/Deno/. Both commands would use port 8000
+if left alone, so the demo server is moved to 8001.
+
+Ctrl-C stops each server.
 
 ## Secure by default
 
