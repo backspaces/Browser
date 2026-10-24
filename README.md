@@ -63,6 +63,11 @@ explains it.
   say what to do. `PUT` versus `POST`, status codes that carry meaning,
   one URL in several formats, and REST versus RPC, against a small live
   API on val.town. ([try it](https://backspaces.github.io/Browser/REST/))
+- [Deno](Deno/): JavaScript outside the browser. Layers 1 and 2 with no
+  DOM, one `fetch(request)` handler that runs unchanged in a page, in
+  Deno and on Cloudflare, and the toolchain Deno builds in: permissions,
+  `deno.json` and its tasks, npm and JSR packages.
+  ([try it](https://backspaces.github.io/Browser/Deno/))
 
 Planned, roughly in order: events and forms, storage, modules,
 page lifecycle, CSS layout (flex, then grid), canvas.
@@ -82,4 +87,5 @@ modules from it. For those, serve the folder instead:
 deno run -A jsr:@std/http/file-server
 ```
 
-then open the address it prints.
+then open the address it prints. (That's Deno running a file server
+straight from its package registry; the [Deno](Deno/) topic explains.)

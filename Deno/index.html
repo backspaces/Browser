@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deno</title>
+<style>
+  body { font: 15px system-ui, sans-serif; max-width: 56rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.4; }
+  h2 { font-size: 1.05rem; margin: 1.2rem 0 .3rem; }
+  code, pre, input { font: 12.5px ui-monospace, monospace; }
+  pre { margin: .3rem 0; padding: .4rem .5rem; background: #f4f4f4; border: 1px solid #ddd; overflow-x: auto; white-space: pre-wrap; }
+  .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .5rem 0; }
+  .row input { padding: .2rem; min-width: 0; flex: 1 1 14rem; }
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 44rem) { .columns { grid-template-columns: 1fr; } }
+  .note { border: 1px solid; padding: .5rem .8rem; margin: .5rem 0; }
+  .ok { background: #e6f4e6; border-color: #7a7; }
+  .warn { background: #fdf3dc; border-color: #c9a33a; }
+  .bad { background: #fbe6e6; border-color: #c77; }
+  .hint { color: #555; font-size: 13.5px; margin: .2rem 0 .5rem; }
+</style>
+</head>
+<body>
+<h1>Deno</h1>
+<p>Deno runs JavaScript outside the browser. A Deno server is one function:
+a <code>Request</code> goes in, a <code>Response</code> comes out, the same classes a page uses with
+<a href="../fetch/">fetch</a>. So the server below, <a href="server.js">server.js</a>, runs in two places at once:
+<b>in this page</b>, called directly with no network, and <b>in Deno</b> on your computer, called over HTTP.
+Same file, same answers; only <code>ranIn</code> differs.
+<a href="https://github.com/backspaces/Browser/blob/main/Deno/README.md">Notes</a>.</p>
+
+<p class="hint">For the right-hand column, start the server from the repo folder:
+<code>deno serve --port 8001 Deno/server.js</code>.
+The left-hand column needs nothing.</p>
+
+<div class="row">
+  Try:
+  <button data-path="/hello?name=Ada">Hello</button>
+  <button data-path="/time">Time</button>
+  <button data-path="/dice?sides=20">Roll a d20</button>
+  <button data-path="/dice?sides=1">Bad dice</button>
+  <button data-path="/nope">Not found</button>
+</div>
+<div class="row">
+  <label for="path">path</label>
+  <input id="path" value="/hello?name=Ada">
+  <button id="send">Send to both</button>
+</div>
+
+<h2>The code</h2>
+<pre id="code"></pre>
+
+<div class="columns">
+  <div>
+    <h2>In this page</h2>
+    <pre id="page">(press a button)</pre>
+  </div>
+  <div>
+    <h2>From Deno at localhost:8001</h2>
+    <pre id="deno">(press a button)</pre>
+  </div>
+</div>
+<div id="verdict"></div>
+
+<script type="module">
+import server from "./server.js";
+
+const $ = (id) => document.getElementById(id);
+const denoUrl = "http://localhost:8001";
+
+for (const b of document.querySelectorAll("[data-path]")) {
+  b.onclick = () => { $("path").value = b.dataset.path; send(); };
+}
+$("send").onclick = send;
+$("path").oninput = showCode;
+
+function showCode() {
+  const path = JSON.stringify($("path").value);
+  $("code").textContent = [
+    `import server from "./server.js";`,
+    ``,
+    `// In this page: call the handler yourself. No network.`,
+    `const a = await server.fetch(new Request(new URL(${path}, location.href)));`,
+    ``,
+    `// In Deno: deno serve calls the same handler for each HTTP request.`,
+    `const b = await fetch(new URL(${path}, ${JSON.stringify(denoUrl)}));`,
+  ].join("\n");
+}
+
+// A Response as text: status, content type, body.
+async function show(res) {
+  return [
+    `status ${res.status}  ok ${res.ok}`,
+    `content-type ${res.headers.get("content-type")}`,
+    "",
+    await res.text(),
+  ].join("\n");
+}
+
+async function send() {
+  showCode();
+  const path = $("path").value;
+  $("page").textContent = $("deno").textContent = "…";
+  $("verdict").replaceChildren();
+
+  // The handler, run right here. new Request needs a full URL, so the
+  // path is resolved against this page's address.
+  const a = await server.fetch(new Request(new URL(path, location.href)));
+  $("page").textContent = await show(a);
+
+  // The same handler, run by Deno, reached over HTTP.
+  try {
+    const b = await fetch(new URL(path, denoUrl));
+    $("deno").textContent = await show(b);
+    verdict("ok", "Both answered from the same server.js. Compare them: everything matches except ranIn (and the time or the roll, which change on every call). The handler only knows it got a Request and must return a Response; who called it doesn't matter.");
+  } catch (e) {
+    $("deno").textContent = `(no answer)\n${e.name}: ${e.message}`;
+    verdict("warn", "The page's copy answered, but nothing answered at localhost:8001. Start the server with deno serve --port 8001 Deno/server.js, then try again. If it is running, your browser may be blocking a public page from calling your own computer; open this page from a local file server instead (see Notes).");
+  }
+}
+
+function verdict(kind, text) {
+  const p = document.createElement("p");
+  p.className = "note " + kind;
+  p.textContent = text;
+  $("verdict").replaceChildren(p);
+}
+
+showCode();
+</script>
+</body>
+</html>
